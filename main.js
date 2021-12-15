@@ -4,16 +4,6 @@ const { core, console, event, mpv, http, menu, overlay, preferences, utils, file
 
 const item = menu.item("Danmaku");
 
-function strToBuffer (string) {
-    let arrayBuffer = new ArrayBuffer(string.length * 1);
-    let newUint = new Uint8Array(arrayBuffer);
-    newUint.forEach((_, i) => {
-      newUint[i] = string.charCodeAt(i);
-    });
-    return newUint;
-}
-
-
 item.addSubMenuItem(menu.item("Show OSD", () => {
     core.osd("This is a demo message");
 }))
