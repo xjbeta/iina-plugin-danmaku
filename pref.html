@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div>
+        <label>
+            Key1:
+            <input type="number" data-type="int" data-pref-key="test">
+        </label>
+    </div>
+    <div>
+        <label>
+            Key2:
+            <input type="text" data-pref-key="test2">
+        </label>
+    </div>
+    <script type="text/javascript">
+        const { preferences } = window.iina;
+        const inputs = document.querySelectorAll("input[data-pref-key]");
+        Array.prototype.forEach.call(inputs, input => {
+            const key = input.dataset.prefKey;
+            iina.log(key)
+            preferences.get(key, (value) => {
+                iina.log(value)
+                input.value = value;
+            });
+            input.addEventListener("change", () => {
+                let value = input.value;
+                switch (input.dataset.type) {
+                    case "int": value = parseInt(value); break;
+                    case "float": value = parseFloat(value); break;
+                }
+                preferences.set(key, value);
+            });
+        });
+    </script>
+</body>
+</html>

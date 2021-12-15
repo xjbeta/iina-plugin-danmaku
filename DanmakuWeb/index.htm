@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta http-equiv="X-UA-Compatible" value="IE=9">
+	<title>IINA-Plus danmaku</title>
+	<link rel="stylesheet" href="default.css" />
+
+	<!-- CCL -->
+	<link rel="stylesheet" href="../node_modules/comment-core-library/dist/css/style.min.css" />
+	<script type="text/javascript" src="../node_modules/comment-core-library/dist/CommentCoreLibrary.min.js"></script>
+	<!-- Base -->
+	<script src="main.js"></script>
+	<!-- Extensions -->
+</head>
+
+<body>
+	<script type="text/javascript">
+		iina.onMessage("initDM", () => {
+			window.bind();
+			window.initDM();
+			window.resize();
+		});
+		iina.onMessage("resizeWindow", () => {
+			window.resize();
+		});
+		iina.onMessage("sendDM", (t) => {
+			var comment = {
+				'text': t.text,
+				'stime': 0,
+				'mode': 1,
+				'color': 0xffffff,
+				'border': false
+			};
+			window.cm.send(comment);
+		});
+		iina.onMessage("loadDM", (t) => {
+			window.loadDM(t.content, 'iina-danmaku');
+		});
+		iina.onMessage("timeChanged", (t) => {
+			window.cm.time(Math.floor(t.time * 1000));
+		});
+		iina.onMessage("pauseChanged", (t) => {
+			t.isPaused ? window.cm.stop() : window.cm.start();
+		});
+	</script>
+
+	<div id="player-unit">
+		<div class="m20 abp" id="player">
+			<div id="commentCanvas" class="container"></div>
+		</div>
+		<span class="status" id="status"
+			style="width:12px;height:12px;margin-top:65px;margin-left:12px;float:left;border-radius:50%;">
+		</span>
+	</div>
+</body>
+
+</html>

@@ -1,0 +1,27 @@
+{
+    "name": "Danmaku",
+    "identifier": "com.xjbeta.danmaku",
+    "version": "0.1.0",
+    "ghVersion": 2,
+    "ghRepo": "xjbeta/iina-plugin-danmaku",
+    "description": "IINA Danmaku",
+    "author": {
+        "name": "xjbeta",
+        "email": "xjbeta",
+        "url": "https://github.com/xjbeta"
+    },
+    "entry": "main.js",
+    "permissions": [
+        "show-osd",
+        "menu-items",
+        "video-overlay",
+        "call-process",
+        "file-system"
+    ],
+    "preferencesPage": "pref.html",
+    "preferenceDefaults": {
+        "keyNum": 10,
+        "keyString": "hello",
+        "keyBool": true
+    }
+}
