@@ -5,6 +5,34 @@ var isLiving = true;
 var defWidth = 680;
 var uuid = '';
 
+iina.onMessage("initDM", () => {
+    window.bind();
+    window.initDM();
+    window.resize();
+});
+iina.onMessage("resizeWindow", () => {
+    window.resize();
+});
+iina.onMessage("sendDM", (t) => {
+    var comment = {
+        'text': t.text,
+        'stime': 0,
+        'mode': 1,
+        'color': 0xffffff,
+        'border': false
+    };
+    window.cm.send(comment);
+});
+iina.onMessage("loadDM", (t) => {
+    window.loadDM(t.content, 'iina-danmaku');
+});
+iina.onMessage("timeChanged", (t) => {
+    window.cm.time(Math.floor(t.time * 1000));
+});
+iina.onMessage("pauseChanged", (t) => {
+    t.isPaused ? window.cm.stop() : window.cm.start();
+});
+
 function bind() {
     window.cm = new CommentManager($('commentCanvas'));
     cm.init();
