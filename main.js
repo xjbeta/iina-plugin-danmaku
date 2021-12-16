@@ -1,19 +1,36 @@
 /// <reference path="node_modules/iina-plugin-definition/iina/index.d.ts" />
 
 const { core, console, event, mpv, http, menu, overlay, preferences, utils, file } = iina;
-
 const item = menu.item("Danmaku");
 
-item.addSubMenuItem(menu.item("Show OSD", () => {
-    core.osd("This is a demo message");
-}))
+
+let overlayShowing = false;
+function showOverlay(osc=true) {
+    if (overlayShowing) {
+        overlay.hide();
+        core.osd("Hide Danmaku.");
+    } else {
+        overlay.show();
+        
+    }
+    overlayShowing = !overlayShowing;
+
+    if (osc) {
+        let s = overlayShowing ? "Show" : "Hide"
+        core.osd(s + " Danmaku.");
+    };
+};
+
 
 item.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
     const path = await iina.utils.chooseFile('Select Danmaku File...', {'chooseDir': false, 'allowedFileTypes': ['xml']});
-    const content = await iina.file.read(path)
+    const content = await iina.file.read(path);
+    
+    if (!overlayShowing) {
+        showOverlay(false);
+    };
 
-    overlay.postMessage("loadDM", {'content': JSON.stringify(content).slice(1, -1)})
-
+    overlay.postMessage("loadDM", {'content': JSON.stringify(content).slice(1, -1)});
 
     iina.event.on("iina.window-resized", () => {
         console.log('event, resizeWindow')
@@ -33,20 +50,23 @@ item.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
 
 item.addSubMenuItem(menu.separator());
 
+item.addSubMenuItem(menu.item("Show / Hide Danmaku", () => {
+    showOverlay();
+}))
 
 
 menu.addItem(item);
 
 iina.event.on("iina.pip.changed", (pip) => {
-    console.log("PIP: " + pip)
+    console.log("PIP: " + pip);
 });
 
 iina.event.on("iina.window-loaded", () => {
     overlay.loadFile("DanmakuWeb/index.htm");
-    overlay.show()
+    overlay.show();
+    overlayShowing = true;
 });
 
 iina.event.on("iina.plugin-overlay-loaded", () => {
     overlay.postMessage("initDM", {});
 });
-
