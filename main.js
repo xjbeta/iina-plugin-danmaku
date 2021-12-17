@@ -70,3 +70,8 @@ iina.event.on("iina.window-loaded", () => {
 iina.event.on("iina.plugin-overlay-loaded", () => {
     overlay.postMessage("initDM", {});
 });
+
+iina.event.on("iina.window-will-close", () => {
+    overlay.postMessage("close", {});
+    overlay.simpleMode();
+});

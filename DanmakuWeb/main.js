@@ -32,6 +32,12 @@ iina.onMessage("timeChanged", (t) => {
 iina.onMessage("pauseChanged", (t) => {
     t.isPaused ? window.cm.stop() : window.cm.start();
 });
+iina.onMessage("close", () => {
+    cm.clear;
+    cm.stop;
+});
+
+
 
 function bind() {
     window.cm = new CommentManager($('commentCanvas'));
