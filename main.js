@@ -71,6 +71,13 @@ function parseOpts() {
     };
 };
 
+// Init MainMenu Item.
+item.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
+    let path = await iina.utils.chooseFile('Select Danmaku File...', {'chooseDir': false, 'allowedFileTypes': ['xml']});
+    xmlPath = path;
+    loadDanmaku();
+}));
+
 item.addSubMenuItem(menu.separator());
 
 item.addSubMenuItem(menu.item("Show / Hide Danmaku", () => {
@@ -78,6 +85,46 @@ item.addSubMenuItem(menu.item("Show / Hide Danmaku", () => {
 }));
 
 menu.addItem(item);
+
+
+let danmakuWebLoaded = false;
+
+function loadDanmaku() {
+    if (!danmakuWebLoaded) {
+        overlay.loadFile("DanmakuWeb/index.htm");
+        danmakuWebLoaded = true;
+    };
+};
+
+function unloadDanmaku() {
+    if (danmakuWebLoaded) {
+        overlay.loadFile("DanmakuWeb/index.htm");
+        danmakuWebLoaded = false;
+    };
+};
+
+iina.event.on("iina.plugin-overlay-loaded", () => {
+    console.log('iina+ .plugin-overlay-loaded      ' + xmlPath);
+    if (xmlPath) {
+        showOverlay(false);
+
+        overlay.postMessage("initDM", {});
+        try {
+            let json = JSON.parse(xmlPath);
+            overlay.postMessage('initDanmakuOpts', json);
+        } catch (error) {
+            loadXMLFile(xmlPath);
+        }
+        xmlPath = undefined;
+    }
+});
+
+
+iina.event.on("iina.window-will-close", () => {
+    xmlPath = undefined;
+    parsedOpts = [];
+    unloadDanmaku();
+});
 
 iina.event.on("iina.pip.changed", (pip) => {
     console.log("PIP: " + pip);
