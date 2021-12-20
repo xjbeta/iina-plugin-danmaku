@@ -130,17 +130,21 @@ iina.event.on("iina.pip.changed", (pip) => {
     console.log("PIP: " + pip);
 });
 
-iina.event.on("iina.window-loaded", () => {
-    overlay.loadFile("DanmakuWeb/index.htm");
-    overlay.show();
-    overlayShowing = true;
+
+iina.event.on("iina.file-started", () => {
+    parseOpts();
 });
 
-iina.event.on("iina.plugin-overlay-loaded", () => {
-    overlay.postMessage("initDM", {});
+
+iina.event.on("iina.window-resized", () => {
+    overlay.postMessage("resizeWindow", {});
 });
 
-iina.event.on("iina.window-will-close", () => {
-    overlay.postMessage("close", {});
-    overlay.simpleMode();
+iina.event.on("mpv.pause.changed", (isPaused) => {
+    overlay.postMessage("pauseChanged", {'isPaused': isPaused});
+});
+
+
+iina.event.on("mpv.time-pos.changed", (t) => {
+    overlay.postMessage("timeChanged", {'time': t});
 });
