@@ -10,6 +10,11 @@ iina.onMessage("initDM", () => {
     window.initDM();
     window.resize();
 });
+
+iina.onMessage("initDanmakuOpts", (o) => {
+    initContent(o.uuid, o.port);
+});
+
 iina.onMessage("resizeWindow", () => {
     window.resize();
 });

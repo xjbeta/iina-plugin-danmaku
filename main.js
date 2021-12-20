@@ -21,32 +21,58 @@ function showOverlay(osc=true) {
     };
 };
 
-
-item.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
-    const path = await iina.utils.chooseFile('Select Danmaku File...', {'chooseDir': false, 'allowedFileTypes': ['xml']});
-    const content = await iina.file.read(path);
-    
-    if (!overlayShowing) {
-        showOverlay(false);
-    };
-
+var xmlPath;
+function loadXMLFile(path) {
+    loadDanmaku();
+    const content = iina.file.read(path);
     overlay.postMessage("loadDM", {'content': JSON.stringify(content).slice(1, -1)});
+};
 
-    iina.event.on("iina.window-resized", () => {
-        console.log('event, resizeWindow')
-        overlay.postMessage("resizeWindow", {});
-    });
+function hexToString(hex) {
+    hex = hex.substr(2);
+    hex = hex.replace( /../g , hex2=>('%'+hex2));
+    return decodeURIComponent(hex);
+};
+
+var parsedOpts = [];
+function parseOpts() {
+    let scriptOpts = mpv.getString('script-opts').split(',');
+    if (parsedOpts.includes(scriptOpts)) {
+        return;
+    };
+    parsedOpts.push(scriptOpts);
+
+    console.log('iina+  scriptOpts       '  + scriptOpts);
+
+    let iinaPlusKey = 'iinaPlusArgs=';
+    let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusKey));
+    if (iinaPlusValue) {
+        let args = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusKey.length))).args;
+        mpv.command('loadfile', args);
+        console.log('mpv.command  loadfile   ' + args);
+    } else {
+        let danmakuPluginKey = 'DanmakuPlugin=';
+        let danmakuPluginValue = scriptOpts.find(s => s.startsWith(danmakuPluginKey));
+        if (danmakuPluginValue) {
+            xmlPath = hexToString(danmakuPluginValue.substring(danmakuPluginKey.length));
+        } else {
+            console.log('Not Find danmaku opts');
+        };
     
-    iina.event.on("mpv.time-pos.changed", (t) => {
-        console.log('event, time-pos:' + t)
-        overlay.postMessage("timeChanged", {'time': t});
-    });
-    
-    iina.event.on("mpv.pause.changed", (isPaused) => {
-        console.log('event, isPaused:' + isPaused)
-        overlay.postMessage("pauseChanged", {'isPaused': isPaused});
-    });
-}))
+        let xmlPathKey = 'DanmakuPluginXML=';
+        let xmlPathValue = scriptOpts.find(s => s.startsWith(xmlPathKey));
+        if (xmlPathValue) {
+            xmlPath = hexToString(xmlPathValue.substring(xmlPathKey.length));
+        } else {
+            console.log('Not Find danmaku xml file path');
+        };
+
+        if (danmakuPluginValue || xmlPathValue) {
+            console.log(xmlPath);
+            loadDanmaku();
+        };
+    };
+};
 
 item.addSubMenuItem(menu.separator());
 
