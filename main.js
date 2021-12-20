@@ -3,21 +3,18 @@
 const { core, console, event, mpv, http, menu, overlay, preferences, utils, file } = iina;
 const item = menu.item("Danmaku");
 
-
 let overlayShowing = false;
 function showOverlay(osc=true) {
-    if (overlayShowing) {
-        overlay.hide();
-        core.osd("Hide Danmaku.");
-    } else {
-        overlay.show();
-        
-    }
-    overlayShowing = !overlayShowing;
-
+    overlay.show();
     if (osc) {
-        let s = overlayShowing ? "Show" : "Hide"
-        core.osd(s + " Danmaku.");
+        core.osd("Show Danmaku.");
+    };
+};
+
+function hideOverlay(osc=true) {
+    overlay.hide();
+    if (osc) {
+        core.osd("Hide Danmaku.");
     };
 };
 
@@ -77,9 +74,8 @@ function parseOpts() {
 item.addSubMenuItem(menu.separator());
 
 item.addSubMenuItem(menu.item("Show / Hide Danmaku", () => {
-    showOverlay();
-}))
-
+    overlayShowing ? hideOverlay() : showOverlay();
+}));
 
 menu.addItem(item);
 
