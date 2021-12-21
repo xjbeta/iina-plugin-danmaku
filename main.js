@@ -3,6 +3,8 @@
 const { core, console, event, mpv, http, menu, overlay, preferences, utils, file } = iina;
 const item = menu.item("Danmaku");
 
+var danmakuOpts;
+
 let overlayShowing = false;
 function showOverlay(osc=true) {
     overlay.show();
@@ -18,7 +20,6 @@ function hideOverlay(osc=true) {
     };
 };
 
-var xmlPath;
 function loadXMLFile(path) {
     loadDanmaku();
     const content = iina.file.read(path);
@@ -26,46 +27,34 @@ function loadXMLFile(path) {
 };
 
 function hexToString(hex) {
-    hex = hex.substr(2);
     hex = hex.replace( /../g , hex2=>('%'+hex2));
     return decodeURIComponent(hex);
 };
 
-var parsedOpts = [];
-function parseOpts() {
-    let scriptOpts = mpv.getString('script-opts').split(',');
-    if (parsedOpts.includes(scriptOpts)) {
-        return;
-    };
-    parsedOpts.push(scriptOpts);
+var optsParsed = false;
 
-    console.log('iina+  scriptOpts       '  + scriptOpts);
+function parseOpts() {
+    if (optsParsed) {
+        return;
+    }
+    optsParsed = true;
+
+    let scriptOpts = mpv.getString('script-opts').split(',');
+
+    mpv.set('script-opts', '');
 
     let iinaPlusKey = 'iinaPlusArgs=';
     let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusKey));
     if (iinaPlusValue) {
-        let args = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusKey.length))).args;
-        mpv.command('loadfile', args);
-        console.log('mpv.command  loadfile   ' + args);
-    } else {
-        let danmakuPluginKey = 'DanmakuPlugin=';
-        let danmakuPluginValue = scriptOpts.find(s => s.startsWith(danmakuPluginKey));
-        if (danmakuPluginValue) {
-            xmlPath = hexToString(danmakuPluginValue.substring(danmakuPluginKey.length));
-        } else {
-            console.log('Not Find danmaku opts');
-        };
-    
-        let xmlPathKey = 'DanmakuPluginXML=';
-        let xmlPathValue = scriptOpts.find(s => s.startsWith(xmlPathKey));
-        if (xmlPathValue) {
-            xmlPath = hexToString(xmlPathValue.substring(xmlPathKey.length));
-        } else {
-            console.log('Not Find danmaku xml file path');
+        let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusKey.length)));
+        console.log('iina+  opts       '  + JSON.stringify(opts));
+
+        if (opts.hasOwnProperty('mpvArgs')) {
+            mpv.command('loadfile', opts.mpvArgs);
         };
 
-        if (danmakuPluginValue || xmlPathValue) {
-            console.log(xmlPath);
+        if (opts.hasOwnProperty('xmlPath') || (opts.hasOwnProperty('port') && opts.hasOwnProperty('uuid'))) {
+            danmakuOpts = opts;
             loadDanmaku();
         };
     };
@@ -74,7 +63,7 @@ function parseOpts() {
 // Init MainMenu Item.
 item.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
     let path = await iina.utils.chooseFile('Select Danmaku File...', {'chooseDir': false, 'allowedFileTypes': ['xml']});
-    xmlPath = path;
+    danmakuOpts = {'xmlPath': path};
     loadDanmaku();
 }));
 
@@ -104,25 +93,31 @@ function unloadDanmaku() {
 };
 
 iina.event.on("iina.plugin-overlay-loaded", () => {
-    console.log('iina+ .plugin-overlay-loaded      ' + xmlPath);
-    if (xmlPath) {
-        showOverlay(false);
+    if (!danmakuOpts) {
+        return;
+    };
 
+    console.log('iina+ .plugin-overlay-loaded      ' + danmakuOpts);
+    if (danmakuOpts.hasOwnProperty('xmlPath') || (danmakuOpts.hasOwnProperty('port') && danmakuOpts.hasOwnProperty('uuid'))) {
+        showOverlay(false);
         overlay.postMessage("initDM", {});
-        try {
-            let json = JSON.parse(xmlPath);
-            overlay.postMessage('initDanmakuOpts', json);
-        } catch (error) {
-            loadXMLFile(xmlPath);
-        }
-        xmlPath = undefined;
-    }
+    };
+
+    if (danmakuOpts.hasOwnProperty('port') && danmakuOpts.hasOwnProperty('uuid')) {
+        overlay.postMessage('initDanmakuOpts', {'port': danmakuOpts.port, 'uuid': danmakuOpts.uuid});
+    };
+
+    if (danmakuOpts.hasOwnProperty('xmlPath')) {
+        loadXMLFile(danmakuOpts.xmlPath);
+    };
+
+    danmakuOpts = undefined;
 });
 
 
 iina.event.on("iina.window-will-close", () => {
-    xmlPath = undefined;
-    parsedOpts = [];
+    danmakuOpts = undefined;
+    optsParsed = false;
     unloadDanmaku();
 });
 
