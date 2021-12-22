@@ -31,22 +31,29 @@ function hexToString(hex) {
     return decodeURIComponent(hex);
 };
 
+
+let iinaPlusArgsKey = 'iinaPlusArgs=';
 var optsParsed = false;
+
+function removeOpts() {
+    var v = mpv.getString('script-opts').split(',').filter(o => !o.startsWith(iinaPlusArgsKey)).join(',');
+    mpv.set('script-opts', v);
+};
 
 function parseOpts() {
     if (optsParsed) {
+        removeOpts();
         return;
     }
-    optsParsed = true;
 
     let scriptOpts = mpv.getString('script-opts').split(',');
 
-    mpv.set('script-opts', '');
-
-    let iinaPlusKey = 'iinaPlusArgs=';
-    let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusKey));
+    
+    let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
     if (iinaPlusValue) {
-        let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusKey.length)));
+        optsParsed = true;
+
+        let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         console.log('iina+  opts       '  + JSON.stringify(opts));
 
         if (opts.hasOwnProperty('mpvArgs')) {
@@ -118,6 +125,7 @@ iina.event.on("iina.plugin-overlay-loaded", () => {
 iina.event.on("iina.window-will-close", () => {
     danmakuOpts = undefined;
     optsParsed = false;
+    removeOpts();
     unloadDanmaku();
 });
 
