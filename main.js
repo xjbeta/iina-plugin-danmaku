@@ -5,12 +5,13 @@ const item = menu.item("Danmaku");
 
 var danmakuOpts;
 
-let overlayShowing = false;
+var overlayShowing = false;
 function showOverlay(osc=true) {
     overlay.show();
     if (osc) {
         core.osd("Show Danmaku.");
     };
+    overlayShowing = true;
 };
 
 function hideOverlay(osc=true) {
@@ -18,6 +19,7 @@ function hideOverlay(osc=true) {
     if (osc) {
         core.osd("Hide Danmaku.");
     };
+    overlayShowing = false;
 };
 
 function loadXMLFile(path) {
