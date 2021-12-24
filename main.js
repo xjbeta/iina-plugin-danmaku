@@ -3,15 +3,21 @@
 const { core, console, event, mpv, http, menu, overlay, preferences, utils, file } = iina;
 const item = menu.item("Danmaku");
 
+let iinaPlusArgsKey = 'iinaPlusArgs=';
 var danmakuOpts;
+var optsParsed = false;
 
+var danmakuWebLoaded = false;
 var overlayShowing = false;
+var mpvPaused = false;
+
 function showOverlay(osc=true) {
     overlay.show();
     if (osc) {
         core.osd("Show Danmaku.");
     };
     overlayShowing = true;
+    setObserver();
 };
 
 function hideOverlay(osc=true) {
@@ -20,6 +26,7 @@ function hideOverlay(osc=true) {
         core.osd("Hide Danmaku.");
     };
     overlayShowing = false;
+    setObserver();
 };
 
 function loadXMLFile(path) {
@@ -32,10 +39,6 @@ function hexToString(hex) {
     hex = hex.replace( /../g , hex2=>('%'+hex2));
     return decodeURIComponent(hex);
 };
-
-
-let iinaPlusArgsKey = 'iinaPlusArgs=';
-var optsParsed = false;
 
 function removeOpts() {
     var v = mpv.getString('script-opts').split(',').filter(o => !o.startsWith(iinaPlusArgsKey)).join(',');
@@ -84,13 +87,11 @@ item.addSubMenuItem(menu.item("Show / Hide Danmaku", () => {
 
 menu.addItem(item);
 
-
-let danmakuWebLoaded = false;
-
 function loadDanmaku() {
     if (!danmakuWebLoaded) {
         overlay.loadFile("DanmakuWeb/index.htm");
         danmakuWebLoaded = true;
+        setObserver();
     };
 };
 
@@ -98,6 +99,7 @@ function unloadDanmaku() {
     if (danmakuWebLoaded) {
         overlay.loadFile("DanmakuWeb/index.htm");
         danmakuWebLoaded = false;
+        setObserver();
     };
 };
 
@@ -140,16 +142,30 @@ iina.event.on("iina.file-started", () => {
     parseOpts();
 });
 
-
-iina.event.on("iina.window-resized", () => {
-    overlay.postMessage("resizeWindow", {});
-});
-
 iina.event.on("mpv.pause.changed", (isPaused) => {
     overlay.postMessage("pauseChanged", {'isPaused': isPaused});
+    mpvPaused = isPaused;
+    setObserver();
 });
 
 
-iina.event.on("mpv.time-pos.changed", (t) => {
+var timePosListenerID;
+
+function setObserver() {
+    let timePosKey = "mpv.time-pos.changed";
+
+    if (danmakuWebLoaded && !mpvPaused && overlayShowing) {
+        timePosListenerID = iina.event.on(timePosKey, (t) => {
+            overlay.postMessage("timeChanged", {'time': t});
+        });
+        initObserverValues();
+    } else {
+        iina.event.off(timePosKey, timePosListenerID);
+        timePosListenerID = undefined;
+    };
+};
+
+function initObserverValues() {
+    let t = mpv.getNumber('time-pos');
     overlay.postMessage("timeChanged", {'time': t});
-});
+};
