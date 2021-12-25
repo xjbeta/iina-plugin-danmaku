@@ -175,4 +175,5 @@ function setObserver() {
 function initObserverValues() {
     let t = mpv.getNumber('time-pos');
     overlay.postMessage("timeChanged", {'time': t});
+    overlay.postMessage("resizeWindow", {});
 };
