@@ -149,19 +149,26 @@ iina.event.on("mpv.pause.changed", (isPaused) => {
 });
 
 
-var timePosListenerID;
+var windowScaleListenerID, timePosListenerID;
 
 function setObserver() {
     let timePosKey = "mpv.time-pos.changed";
+    let windowScaleKey = "mpv.window-scale.changed";
 
     if (danmakuWebLoaded && !mpvPaused && overlayShowing) {
         timePosListenerID = iina.event.on(timePosKey, (t) => {
             overlay.postMessage("timeChanged", {'time': t});
         });
+        windowScaleListenerID = iina.event.on(windowScaleKey, () => {
+            overlay.postMessage("resizeWindow", {});
+        });
         initObserverValues();
     } else {
+
+        iina.event.off(windowScaleKey, windowScaleListenerID);
         iina.event.off(timePosKey, timePosListenerID);
         timePosListenerID = undefined;
+        windowScaleListenerID = undefined;
     };
 };
 
