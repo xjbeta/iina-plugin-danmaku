@@ -97,7 +97,7 @@ function loadDanmaku() {
 
 function unloadDanmaku() {
     if (danmakuWebLoaded) {
-        overlay.loadFile("DanmakuWeb/index.htm");
+        overlay.simpleMode();
         danmakuWebLoaded = false;
         setObserver();
     };
