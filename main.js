@@ -2,6 +2,7 @@
 
 const { core, console, event, mpv, http, menu, overlay, preferences, utils, file } = iina;
 const item = menu.item("Danmaku");
+const instanceID = (Math.random() + 1).toString(36).substring(3);
 
 let iinaPlusArgsKey = 'iinaPlusArgs=';
 var danmakuOpts;
@@ -12,7 +13,7 @@ var overlayShowing = false;
 var mpvPaused = false;
 
 function print(str) {
-    console.log(str);
+    console.log('[' + instanceID + '] ' + str);
 };
 
 function showOverlay(osc=true) {
