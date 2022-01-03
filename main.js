@@ -128,6 +128,9 @@ function initDanmakuWeb() {
         danmakuOpts.xmlContent = loadXMLFile(danmakuOpts.xmlPath);
     };
 
+    danmakuOpts.dmOpacity = iina.preferences.get('dmOpacity');
+    danmakuOpts.dmSpeed = iina.preferences.get('dmSpeed');
+    danmakuOpts.dmFont = iina.preferences.get('dmFont');
 
     danmakuOpts.mpvArgs = undefined;
     danmakuOpts.xmlPath = undefined;
@@ -163,6 +166,11 @@ iina.event.on("iina.pip.changed", (pip) => {
 
 iina.event.on("iina.file-started", () => {
     print('iina.file-started');
+
+    if (iina.preferences.get('enableIINAPLUSOptsParse') == 0) {
+        print('Ignore IINA+ Opts Parse')
+        return;
+    }
     parseOpts();
 });
 
