@@ -173,10 +173,12 @@ function setObserver(start) {
     let windowScaleKey = "mpv.window-scale.changed";
 
     function stop() {
-        iina.event.off(windowScaleKey, windowScaleListenerID);
-        iina.event.off(timePosKey, timePosListenerID);
-        timePosListenerID = undefined;
-        windowScaleListenerID = undefined;
+        if (timePosListenerID) {
+            iina.event.off(windowScaleKey, windowScaleListenerID);
+            iina.event.off(timePosKey, timePosListenerID);
+            timePosListenerID = undefined;
+            windowScaleListenerID = undefined;
+        };
     };
 
 
