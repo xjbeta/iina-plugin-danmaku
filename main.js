@@ -13,6 +13,13 @@ var overlayShowing = false;
 var mpvPaused = false;
 var danmakuWebInited = false;
 
+let defaultPreferences = {
+    dmOpacity: 1,
+    dmSpeed: 680,
+    dmFont: 'PingFang SC',
+    enableIINAPLUSOptsParse: 0
+};
+
 function print(str) {
     console.log('[' + instanceID + '] ' + str);
 };
@@ -128,9 +135,9 @@ function initDanmakuWeb() {
         danmakuOpts.xmlContent = loadXMLFile(danmakuOpts.xmlPath);
     };
 
-    danmakuOpts.dmOpacity = iina.preferences.get('dmOpacity');
-    danmakuOpts.dmSpeed = iina.preferences.get('dmSpeed');
-    danmakuOpts.dmFont = iina.preferences.get('dmFont');
+    danmakuOpts.dmOpacity = iina.preferences.get('dmOpacity') ?? defaultPreferences.dmOpacity;
+    danmakuOpts.dmSpeed = iina.preferences.get('dmSpeed') ?? defaultPreferences.dmSpeed;
+    danmakuOpts.dmFont = iina.preferences.get('dmFont') ?? defaultPreferences.dmFont;
 
     danmakuOpts.mpvArgs = undefined;
     danmakuOpts.xmlPath = undefined;
@@ -167,7 +174,8 @@ iina.event.on("iina.pip.changed", (pip) => {
 iina.event.on("iina.file-started", () => {
     print('iina.file-started');
 
-    if (iina.preferences.get('enableIINAPLUSOptsParse') == 0) {
+    let e = iina.preferences.get('enableIINAPLUSOptsParse') ?? defaultPreferences.enableIINAPLUSOptsParse;
+    if (e == 0) {
         print('Ignore IINA+ Opts Parse')
         return;
     }
