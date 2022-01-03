@@ -11,6 +11,7 @@ var optsParsed = false;
 var danmakuWebLoaded = false;
 var overlayShowing = false;
 var mpvPaused = false;
+var danmakuWebInited = false;
 
 function print(str) {
     console.log('[' + instanceID + '] ' + str);
@@ -40,12 +41,18 @@ function loadXMLFile(path) {
     print('loadXMLFile.' + 'path: ' + path);
     loadDanmaku();
     const content = iina.file.read(path);
-    overlay.postMessage("loadDM", {'content': JSON.stringify(content).slice(1, -1)});
+    return stringToHex(content);
+};
+
+function stringToHex(str) {
+    return Array.from(str).map(c => 
+        c.charCodeAt(0) < 128 ? c.charCodeAt(0).toString(16).padStart(2, '0') :
+        encodeURIComponent(c).replace(/\%/g,'').toLowerCase()
+      ).join('');
 };
 
 function hexToString(hex) {
-    hex = hex.replace( /../g , hex2=>('%'+hex2));
-    return decodeURIComponent(hex);
+    return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
 };
 
 function removeOpts() {
@@ -58,7 +65,7 @@ function parseOpts() {
     if (optsParsed) {
         removeOpts();
         return;
-    }
+    };
 
     let scriptOpts = mpv.getString('script-opts').split(',');
 
@@ -112,34 +119,34 @@ function unloadDanmaku() {
     };
 };
 
-iina.event.on("iina.plugin-overlay-loaded", () => {
-    print('iina.plugin-overlay-loaded');
-    setObserver(true);
+function initDanmakuWeb() {
     if (!danmakuOpts) {
         return;
     };
 
+    if (danmakuOpts.hasOwnProperty('xmlPath')) {
+        danmakuOpts.xmlContent = loadXMLFile(danmakuOpts.xmlPath);
+    };
+
+
+    danmakuOpts.mpvArgs = undefined;
+    danmakuOpts.xmlPath = undefined;
+
     if (danmakuOpts.hasOwnProperty('xmlPath') || (danmakuOpts.hasOwnProperty('port') && danmakuOpts.hasOwnProperty('uuid'))) {
         print('initDM.');
         showOverlay(false);
-        overlay.postMessage("initDM", {});
+        overlay.postMessage("initDM", danmakuOpts);
+        danmakuWebInited = true;
     };
 
-    if (danmakuOpts.hasOwnProperty('port') && danmakuOpts.hasOwnProperty('uuid')) {
-        let port = danmakuOpts.port;
-        let uuid = danmakuOpts.uuid;
-
-        print('uuid: ' + uuid + ',  ' + 'port: ' + port);
-        overlay.postMessage('initDanmakuOpts', {'port': port, 'uuid': uuid});
-    };
-
-    if (danmakuOpts.hasOwnProperty('xmlPath')) {
-        loadXMLFile(danmakuOpts.xmlPath);
-    };
-
+    setObserver(true);
     danmakuOpts = undefined;
-});
+};
 
+iina.event.on("iina.plugin-overlay-loaded", () => {
+    print('iina.plugin-overlay-loaded');
+    initDanmakuWeb();
+});
 
 iina.event.on("iina.window-will-close", () => {
     print('iina.window-will-close');
@@ -182,7 +189,7 @@ function setObserver(start) {
     };
 
 
-    if (start && !mpvPaused && danmakuWebLoaded && overlayShowing) {
+    if (start && !mpvPaused && danmakuWebLoaded && danmakuWebInited && overlayShowing) {
         print('Start Observers.');
         if (timePosListenerID) {
             stop();
