@@ -5,18 +5,37 @@ var isLiving = true;
 var defWidth = 680;
 var uuid = '';
 
-iina.onMessage("initDM", () => {
+function hexToString(hex) {
+    return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
+};
+
+iina.onMessage("initDM", (opts) => {
+    defWidth = opts.dmSpeed;
+
     window.bind();
     window.initDM();
-    window.resize();
-});
 
-iina.onMessage("initDanmakuOpts", (o) => {
-    initContent(o.uuid, o.port);
+    // Block unknown types.
+    // https://github.com/jabbany/CommentCoreLibrary/issues/97
+    window.cm.filter.allowUnknownTypes = false;
+
+
+    if (opts.hasOwnProperty('xmlContent')) {
+        window.loadDM(hexToString(opts.xmlContent), 'iina-danmaku');
+    };
+
+    if (opts.hasOwnProperty('port') && opts.hasOwnProperty('uuid')) {
+        initWebsocket(opts.uuid, opts.port);
+    };
+
+    window.cm.options.global.opacity = opts.dmOpacity;
+
+    let newCSS = ".customFont {color: #fff;font-family: '"+ opts.dmFont +"',SimHei,SimSun,monospace;font-size: 24px;letter-spacing: 0;line-height: 100%;margin: 0;padding: 3px 0 0 0;position: absolute;text-decoration: none;text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;-webkit-text-size-adjust: none;-ms-text-size-adjust: none;text-size-adjust: none;-webkit-transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);-webkit-transform-origin: 0% 0%;-ms-transform-origin: 0% 0%;transform-origin: 0% 0%;white-space: pre;word-break: keep-all;}}"
+    window.customFont(newCSS);
 });
 
 iina.onMessage("resizeWindow", () => {
-    window.resize();
+    window.cmResize();
 });
 iina.onMessage("sendDM", (t) => {
     var comment = {
@@ -28,9 +47,7 @@ iina.onMessage("sendDM", (t) => {
     };
     window.cm.send(comment);
 });
-iina.onMessage("loadDM", (t) => {
-    window.loadDM(t.content, 'iina-danmaku');
-});
+
 iina.onMessage("timeChanged", (t) => {
     window.cm.time(Math.floor(t.time * 1000));
 });
@@ -42,12 +59,10 @@ iina.onMessage("close", () => {
     cm.stop;
 });
 
-
-
 function bind() {
     window.cm = new CommentManager($('commentCanvas'));
     cm.init();
-    window.resize = function () {
+    window.cmResize = function () {
         var scale = $("player").offsetWidth / defWidth;
         window.cm.options.scroll.scale = scale;
         cm.setBounds();
@@ -72,7 +87,7 @@ function bind() {
         window._provider = new CommentProvider();
         cm.clear();
         window._provider.addTarget(cm);
-        resize();
+        cmResize();
         cm.init();
         cm.start();
     };
@@ -98,7 +113,7 @@ function bind() {
         window._provider = new CommentProvider();
         cm.clear();
         window._provider.addTarget(cm);
-        resize();
+        cmResize();
         switch (provider) {
             case "acfun":
                 window._provider.addStaticSource(
@@ -177,6 +192,33 @@ function updateStatus(status){
     }
 }
 
+function blockDmType(t) {
+    // if (t.includes('List')) {
+    //     window.loadFilter('/danmaku/iina-plus-blockList.xml');
+    // }
+   
+    cm.filter.allowTypes[5] = !t.includes('Top');
+    cm.filter.allowTypes[4] = !t.includes('Bottom');
+    cm.filter.allowTypes[1] = !t.includes('Scroll');
+    cm.filter.allowTypes[2] = !t.includes('Scroll');
+
+    let colorRule = {
+        subject: 'color',
+        op: '=',
+        value: 16777215,
+        mode: 'accept'
+    };
+
+    if (t.includes('Color')) {
+        cm.filter.addRule(colorRule);
+    } else {
+        cm.filter.removeRule(colorRule);
+    };
+
+    cm.filter.allowTypes[7] = !t.includes('Advanced');
+    cm.filter.allowTypes[8] = !t.includes('Advanced');
+};
+
 function start(websocketServerLocation){
     ws = new WebSocket(websocketServerLocation);
     updateStatus('warning');
@@ -192,31 +234,6 @@ function start(websocketServerLocation){
         }
         
         switch(event.method) {
-        case 'start':
-            window.cm.start();
-            break;
-        case 'stop':
-            window.cm.stop();
-            break;
-        case 'initDM':
-            window.initDM();
-            break;
-        case 'resize':
-            window.resize();
-            break;
-        case 'customFont':
-            window.customFont(event.text);
-            break;
-        case 'loadDM':
-            if (event.text == 'acfun') {
-                loadDM('/danmaku/iina-plus-danmaku.json', 'acfun');
-            } else {
-                loadDM('/danmaku/' + 'danmaku' + '-' + uuid + '.xml');
-                
-                console.log('/danmaku/' + 'danmaku' + '-' + uuid + '.xml');
-            }
-            isLiving = false;
-            break;
         case 'sendDM':
             if (document.visibilityState == 'visible') {
                 var comment = {
@@ -227,47 +244,6 @@ function start(websocketServerLocation){
                     'border': false
                 };
                 window.cm.send(comment);
-            }
-            break
-        case 'liveDMServer':
-            updateStatus(event.text);
-            break
-        case 'dmSpeed':
-            defWidth = event.text;
-            window.resize();
-            break
-        case 'dmOpacity':
-            window.cm.options.global.opacity = event.text;
-            break
-        case 'dmFontSize':
-            // updateStatus(event.text);
-            break
-        case 'dmBlockList':
-            let t = event.text;
-            if (t.includes('List')) {
-                window.loadFilter('/danmaku/iina-plus-blockList.xml');
-            }
-            if (t.includes('Top')) {
-                cm.filter.allowTypes[5] = false;
-            }
-            if (t.includes('Bottom')) {
-                cm.filter.allowTypes[4] = false;
-            }
-            if (t.includes('Scroll')) {
-                cm.filter.allowTypes[1] = false;
-                cm.filter.allowTypes[2] = false;
-            }
-            if (t.includes('Color')) {
-                cm.filter.addRule({
-                    subject: 'color',
-                    op: '=',
-                    value: 16777215,
-                    mode: 'accept'
-                });
-            }
-            if (t.includes('Advanced')) {
-                cm.filter.allowTypes[7] = false;
-                cm.filter.allowTypes[8] = false;
             }
             break
         default:
@@ -284,17 +260,24 @@ function start(websocketServerLocation){
     };
 }
 
-function initContent(id, port){
-    bind();
-    initDM();
-    resize();
+// function sendDebugCM(text) {
+//     var comment = {
+//         'text': text,
+//         'stime': 0,
+//         'mode': 1,
+//         'align': 2,
+//         'color': 0xffffff,
+//         'border': false
+//     };
+//     window.cm.send(comment);
+// };
+
+
+function initWebsocket(id, port){
     uuid = id;
     if (port === undefined){
         port = 19080;
     }
     start('ws://127.0.0.1:' + port + '/danmaku-websocket');
-    // Block unknown types.
-    // https://github.com/jabbany/CommentCoreLibrary/issues/97
-    cm.filter.allowUnknownTypes = false;
-    console.log('initContent', id);
+    console.log('initWebsocket', id);
 }
