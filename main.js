@@ -13,6 +13,8 @@ var overlayShowing = false;
 var mpvPaused = false;
 var danmakuWebInited = false;
 
+var isLiving = false;
+
 let defaultPreferences = {
     dmOpacity: 1,
     dmSpeed: 680,
@@ -132,7 +134,10 @@ function initDanmakuWeb() {
     };
 
     if (danmakuOpts.hasOwnProperty('xmlPath')) {
+        isLiving = false;
         danmakuOpts.xmlContent = loadXMLFile(danmakuOpts.xmlPath);
+    } else {
+        isLiving = true;
     };
 
     danmakuOpts.dmOpacity = iina.preferences.get('dmOpacity') ?? defaultPreferences.dmOpacity;
@@ -164,6 +169,10 @@ iina.event.on("iina.window-will-close", () => {
     optsParsed = false;
     removeOpts();
     unloadDanmaku();
+    isLiving = false;
+    overlayShowing = false;
+    mpvPaused = false;
+    danmakuWebInited = false;
 });
 
 iina.event.on("iina.pip.changed", (pip) => {
@@ -197,22 +206,23 @@ function setObserver(start) {
 
     function stop() {
         if (timePosListenerID) {
-            iina.event.off(windowScaleKey, windowScaleListenerID);
             iina.event.off(timePosKey, timePosListenerID);
             timePosListenerID = undefined;
+        };
+        if (windowScaleListenerID) {
+            iina.event.off(windowScaleKey, windowScaleListenerID);
             windowScaleListenerID = undefined;
         };
     };
 
-
     if (start && !mpvPaused && danmakuWebLoaded && danmakuWebInited && overlayShowing) {
         print('Start Observers.');
-        if (timePosListenerID) {
-            stop();
+        stop();
+        if (!isLiving) {
+            timePosListenerID = iina.event.on(timePosKey, (t) => {
+                overlay.postMessage("timeChanged", {'time': t});
+            });
         };
-        timePosListenerID = iina.event.on(timePosKey, (t) => {
-            overlay.postMessage("timeChanged", {'time': t});
-        });
         windowScaleListenerID = iina.event.on(windowScaleKey, () => {
             overlay.postMessage("resizeWindow", {});
         });
