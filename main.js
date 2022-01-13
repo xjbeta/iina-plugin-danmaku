@@ -144,6 +144,24 @@ function initDanmakuWeb() {
     danmakuOpts.dmSpeed = iina.preferences.get('dmSpeed') ?? defaultPreferences.dmSpeed;
     danmakuOpts.dmFont = iina.preferences.get('dmFont') ?? defaultPreferences.dmFont;
 
+    var blockList = [];
+    if ((iina.preferences.get('blockTypeScroll') ?? 0) == 1) {
+        blockList.push('Scroll');
+    };
+    if ((iina.preferences.get('blockTypeTop') ?? 0) == 1) {
+        blockList.push('Top');
+    };
+    if ((iina.preferences.get('blockTypeButtom') ?? 0) == 1) {
+        blockList.push('Bottom');
+    };
+    if ((iina.preferences.get('blockTypeColor') ?? 0) == 1) {
+        blockList.push('Color');
+    };
+    if ((iina.preferences.get('blockTypeAdvanced') ?? 0) == 1) {
+        blockList.push('Advanced');
+    };
+    danmakuOpts.blockType = blockList.join(',');
+
     danmakuOpts.mpvArgs = undefined;
     danmakuOpts.xmlPath = undefined;
 

@@ -30,6 +30,8 @@ iina.onMessage("initDM", (opts) => {
 
     window.cm.options.global.opacity = opts.dmOpacity;
 
+    blockDmType(opts.blockType);
+
     let newCSS = ".customFont {color: #fff;font-family: '"+ opts.dmFont +"',SimHei,SimSun,monospace;font-size: 24px;letter-spacing: 0;line-height: 100%;margin: 0;padding: 3px 0 0 0;position: absolute;text-decoration: none;text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;-webkit-text-size-adjust: none;-ms-text-size-adjust: none;text-size-adjust: none;-webkit-transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);-webkit-transform-origin: 0% 0%;-ms-transform-origin: 0% 0%;transform-origin: 0% 0%;white-space: pre;word-break: keep-all;}}"
     window.customFont(newCSS);
 });
@@ -271,7 +273,6 @@ function start(websocketServerLocation){
 //     };
 //     window.cm.send(comment);
 // };
-
 
 function initWebsocket(id, port){
     uuid = id;
