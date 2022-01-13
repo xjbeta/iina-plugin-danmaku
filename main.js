@@ -11,6 +11,16 @@ var optsParsed = false;
 var danmakuWebLoaded = false;
 var overlayShowing = false;
 var mpvPaused = false;
+var danmakuWebInited = false;
+
+var isLiving = false;
+
+let defaultPreferences = {
+    dmOpacity: 1,
+    dmSpeed: 680,
+    dmFont: 'PingFang SC',
+    enableIINAPLUSOptsParse: 0
+};
 
 function print(str) {
     console.log('[' + instanceID + '] ' + str);
@@ -40,12 +50,18 @@ function loadXMLFile(path) {
     print('loadXMLFile.' + 'path: ' + path);
     loadDanmaku();
     const content = iina.file.read(path);
-    overlay.postMessage("loadDM", {'content': JSON.stringify(content).slice(1, -1)});
+    return stringToHex(content);
+};
+
+function stringToHex(str) {
+    return Array.from(str).map(c => 
+        c.charCodeAt(0) < 128 ? c.charCodeAt(0).toString(16).padStart(2, '0') :
+        encodeURIComponent(c).replace(/\%/g,'').toLowerCase()
+      ).join('');
 };
 
 function hexToString(hex) {
-    hex = hex.replace( /../g , hex2=>('%'+hex2));
-    return decodeURIComponent(hex);
+    return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
 };
 
 function removeOpts() {
@@ -58,7 +74,7 @@ function parseOpts() {
     if (optsParsed) {
         removeOpts();
         return;
-    }
+    };
 
     let scriptOpts = mpv.getString('script-opts').split(',');
 
@@ -112,34 +128,58 @@ function unloadDanmaku() {
     };
 };
 
-iina.event.on("iina.plugin-overlay-loaded", () => {
-    print('iina.plugin-overlay-loaded');
-    setObserver(true);
+function initDanmakuWeb() {
     if (!danmakuOpts) {
         return;
     };
 
+    if (danmakuOpts.hasOwnProperty('xmlPath')) {
+        isLiving = false;
+        danmakuOpts.xmlContent = loadXMLFile(danmakuOpts.xmlPath);
+    } else {
+        isLiving = true;
+    };
+
+    danmakuOpts.dmOpacity = iina.preferences.get('dmOpacity') ?? defaultPreferences.dmOpacity;
+    danmakuOpts.dmSpeed = iina.preferences.get('dmSpeed') ?? defaultPreferences.dmSpeed;
+    danmakuOpts.dmFont = iina.preferences.get('dmFont') ?? defaultPreferences.dmFont;
+
+    var blockList = [];
+    if ((iina.preferences.get('blockTypeScroll') ?? 0) == 1) {
+        blockList.push('Scroll');
+    };
+    if ((iina.preferences.get('blockTypeTop') ?? 0) == 1) {
+        blockList.push('Top');
+    };
+    if ((iina.preferences.get('blockTypeButtom') ?? 0) == 1) {
+        blockList.push('Bottom');
+    };
+    if ((iina.preferences.get('blockTypeColor') ?? 0) == 1) {
+        blockList.push('Color');
+    };
+    if ((iina.preferences.get('blockTypeAdvanced') ?? 0) == 1) {
+        blockList.push('Advanced');
+    };
+    danmakuOpts.blockType = blockList.join(',');
+
+    danmakuOpts.mpvArgs = undefined;
+    danmakuOpts.xmlPath = undefined;
+
     if (danmakuOpts.hasOwnProperty('xmlPath') || (danmakuOpts.hasOwnProperty('port') && danmakuOpts.hasOwnProperty('uuid'))) {
         print('initDM.');
         showOverlay(false);
-        overlay.postMessage("initDM", {});
+        overlay.postMessage("initDM", danmakuOpts);
+        danmakuWebInited = true;
     };
 
-    if (danmakuOpts.hasOwnProperty('port') && danmakuOpts.hasOwnProperty('uuid')) {
-        let port = danmakuOpts.port;
-        let uuid = danmakuOpts.uuid;
-
-        print('uuid: ' + uuid + ',  ' + 'port: ' + port);
-        overlay.postMessage('initDanmakuOpts', {'port': port, 'uuid': uuid});
-    };
-
-    if (danmakuOpts.hasOwnProperty('xmlPath')) {
-        loadXMLFile(danmakuOpts.xmlPath);
-    };
-
+    setObserver(true);
     danmakuOpts = undefined;
-});
+};
 
+iina.event.on("iina.plugin-overlay-loaded", () => {
+    print('iina.plugin-overlay-loaded');
+    initDanmakuWeb();
+});
 
 iina.event.on("iina.window-will-close", () => {
     print('iina.window-will-close');
@@ -147,6 +187,10 @@ iina.event.on("iina.window-will-close", () => {
     optsParsed = false;
     removeOpts();
     unloadDanmaku();
+    isLiving = false;
+    overlayShowing = false;
+    mpvPaused = false;
+    danmakuWebInited = false;
 });
 
 iina.event.on("iina.pip.changed", (pip) => {
@@ -156,6 +200,12 @@ iina.event.on("iina.pip.changed", (pip) => {
 
 iina.event.on("iina.file-started", () => {
     print('iina.file-started');
+
+    let e = iina.preferences.get('enableIINAPLUSOptsParse') ?? defaultPreferences.enableIINAPLUSOptsParse;
+    if (e == 0) {
+        print('Ignore IINA+ Opts Parse')
+        return;
+    }
     parseOpts();
 });
 
@@ -173,21 +223,24 @@ function setObserver(start) {
     let windowScaleKey = "mpv.window-scale.changed";
 
     function stop() {
-        iina.event.off(windowScaleKey, windowScaleListenerID);
-        iina.event.off(timePosKey, timePosListenerID);
-        timePosListenerID = undefined;
-        windowScaleListenerID = undefined;
+        if (timePosListenerID) {
+            iina.event.off(timePosKey, timePosListenerID);
+            timePosListenerID = undefined;
+        };
+        if (windowScaleListenerID) {
+            iina.event.off(windowScaleKey, windowScaleListenerID);
+            windowScaleListenerID = undefined;
+        };
     };
 
-
-    if (start && !mpvPaused && danmakuWebLoaded && overlayShowing) {
+    if (start && !mpvPaused && danmakuWebLoaded && danmakuWebInited && overlayShowing) {
         print('Start Observers.');
-        if (timePosListenerID) {
-            stop();
+        stop();
+        if (!isLiving) {
+            timePosListenerID = iina.event.on(timePosKey, (t) => {
+                overlay.postMessage("timeChanged", {'time': t});
+            });
         };
-        timePosListenerID = iina.event.on(timePosKey, (t) => {
-            overlay.postMessage("timeChanged", {'time': t});
-        });
         windowScaleListenerID = iina.event.on(windowScaleKey, () => {
             overlay.postMessage("resizeWindow", {});
         });

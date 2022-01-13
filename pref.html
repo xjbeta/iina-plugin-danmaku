@@ -1,42 +1,192 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Document</title>
-    <link rel="stylesheet" href="style.css">
+    <!-- <link rel="stylesheet" href="style.css"> -->
 </head>
+
 <body>
     <div>
-        <label>
-            Key1:
-            <input type="number" data-type="int" data-pref-key="test">
-        </label>
+        <table>
+            <tbody>
+                <tr>
+                    <td>Opacity:</td>
+                    <td>
+                        <input type="range" data-type="float" data-pref-key="dmOpacity" id="dmOpacity" min="0" max="1"
+                            step="0.01">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Speed:</td>
+                    <td>
+                        <input type="range" data-type="int" data-pref-key="dmSpeed" id="dmSpeed" min="128" max="1080"
+                            step="1">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Font:</td>
+                    <td>
+                        <input type="text" data-pref-key="dmFont" id="dmFont">
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <font face="PingFang-SC" id="dmFontPreview">Font Preview 字体 预览</font>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Block Type:</td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeScroll" id="blockTypeScroll">
+                        <label for="blockTypeScroll">Scroll</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeTop" id="blockTypeTop">
+                        <label for="blockTypeTop">Top</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeButtom" id="blockTypeButtom">
+                        <label for="blockTypeButtom">Buttom</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeColor" id="blockTypeColor">
+                        <label for="blockTypeColor">Color</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeAdvanced" id="blockTypeAdvanced">
+                        <label for="blockTypeAdvanced">Advanced</label>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
+
+    <hr>
+
     <div>
         <label>
-            Key2:
-            <input type="text" data-pref-key="test2">
+            IINA+ Opts Parse:
+            <input type="checkbox" data-type="int" data-pref-key="enableIINAPLUSOptsParse" id="enableIINAPLUSOptsParse">
         </label>
     </div>
+
     <script type="text/javascript">
         const { preferences } = window.iina;
         const inputs = document.querySelectorAll("input[data-pref-key]");
+
+        let defaultFPText = "Font Preview 字体 预览"
+        let wrongFPText = "Invalid font"
+
+        let defaultPreferences = {
+            dmOpacity: 1,
+            dmSpeed: 680,
+            dmFont: 'PingFang SC',
+            enableIINAPLUSOptsParse: 0,
+            blockTypeScroll: 0,
+            blockTypeTop: 0,
+            blockTypeButtom: 0,
+            blockTypeColor: 0,
+            blockTypeAdvanced: 0,
+        };
+
+
+        function isFontAvailable(font) {
+            // https://www.samclarke.com/javascript-is-font-available/
+            var width;
+            var body = document.body;
+
+            var container = document.createElement('span');
+            container.innerHTML = Array(100).join('wi');
+            container.style.cssText = [
+                'position:absolute',
+                'width:auto',
+                'font-size:128px',
+                'left:-99999px'
+            ].join(' !important;');
+
+            var getWidth = function (fontFamily) {
+                container.style.fontFamily = fontFamily;
+
+                body.appendChild(container);
+                width = container.clientWidth;
+                body.removeChild(container);
+
+                return width;
+            };
+
+            // Pre compute the widths of monospace, serif & sans-serif
+            // to improve performance.
+            var monoWidth = getWidth('monospace');
+            var serifWidth = getWidth('serif');
+            var sansWidth = getWidth('sans-serif');
+            return monoWidth !== getWidth(font + ',monospace') ||
+                sansWidth !== getWidth(font + ',sans-serif') ||
+                serifWidth !== getWidth(font + ',serif');
+        };
+
+        function updateFontPreview(value) {
+            iina.log('Update Preview Font: ' + value);
+            let item = document.getElementById('dmFontPreview')
+            if (isFontAvailable(value)) {
+                item.textContent = defaultFPText;
+                item.face = value;
+            } else {
+                item.textContent = wrongFPText;
+            };
+        };
+
         Array.prototype.forEach.call(inputs, input => {
             const key = input.dataset.prefKey;
-            iina.log(key)
             preferences.get(key, (value) => {
-                iina.log(value)
-                input.value = value;
+                if (value == null) {
+                    value = defaultPreferences[key];
+                };
+
+                iina.log('pref key: ' + key + ', value: ' + value);
+                if (input.type == 'checkbox') {
+                    input.checked = value;
+                } else {
+                    input.value = value;
+                };
+
+                if (input.id == 'dmFont') {
+                    updateFontPreview(value);
+                };
             });
             input.addEventListener("change", () => {
                 let value = input.value;
+
+                if (input.type == 'checkbox') {
+                    value = input.checked ? 1 : 0;
+                };
+
                 switch (input.dataset.type) {
                     case "int": value = parseInt(value); break;
                     case "float": value = parseFloat(value); break;
                 }
                 preferences.set(key, value);
+
+                if (input.id == 'dmFont') {
+                    updateFontPreview(value);
+                };
             });
         });
     </script>
 </body>
+
 </html>
