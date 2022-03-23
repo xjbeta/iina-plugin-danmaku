@@ -122,6 +122,34 @@ function initMenuItems() {
     menu.addItem(lineItem);
 };
 
+function requestNewUrl(quality, line) {
+    print(quality + line);
+
+    let u = 'http://127.0.0.1:'+iinaPlusOpts.port+'/video';
+    let pars = {'url': iinaPlusOpts.rawUrl, 'key': quality, 'pluginAPI': '1'};
+
+    iina.http.get(u, {params: pars}).then((response) => {
+        let re = JSON.parse(hexToString(response.text));
+        let urls = re.urls;
+        var url;
+        if (line >= urls.length) {
+            line = 0;
+        };
+
+        url = urls[line];
+
+        iinaPlusOpts.qualitys = re.qualitys;
+        iinaPlusOpts.currentQuality = re.qualitys.indexOf(quality);
+        iinaPlusOpts.lines = re.lines;
+        iinaPlusOpts.currentLine = line
+
+        mpv.command('loadfile', [url, 'replace', re.mpvScript]);
+        initMenuItems();
+    }).catch((response) => {
+        console.log(response)
+    })
+};
+
 // Init MainMenu Item.
 item.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
     let path = await iina.utils.chooseFile('Select Danmaku File...', {'chooseDir': false, 'allowedFileTypes': ['xml']});
