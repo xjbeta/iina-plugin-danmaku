@@ -1,19 +1,18 @@
 /// <reference path="node_modules/iina-plugin-definition/iina/index.d.ts" />
 
 const { core, console, event, mpv, http, menu, overlay, preferences, utils, file } = iina;
-const item = menu.item("Danmaku");
+const danmakuMenuItem = menu.item("Danmaku");
+
 const instanceID = (Math.random() + 1).toString(36).substring(3);
 
 let iinaPlusArgsKey = 'iinaPlusArgs=';
-var danmakuOpts;
+var iinaPlusOpts;
 var optsParsed = false;
 
 var danmakuWebLoaded = false;
 var overlayShowing = false;
 var mpvPaused = false;
 var danmakuWebInited = false;
-
-var isLiving = false;
 
 let defaultPreferences = {
     dmOpacity: 1,
@@ -78,22 +77,26 @@ function parseOpts() {
 
     let scriptOpts = mpv.getString('script-opts').split(',');
 
-    
     let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
     if (iinaPlusValue) {
         optsParsed = true;
 
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
-        print('iina plus opts: '  + JSON.stringify(opts));
+        print('iina plus opts: ' + JSON.stringify(opts));
 
-        if (opts.hasOwnProperty('mpvArgs')) {
-            mpv.command('loadfile', opts.mpvArgs);
+        mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', opts.mpvScript]);
+        iinaPlusOpts = opts;
+        iinaPlusOpts.mpvScript = undefined;
+        switch(opts.type) {
+            case 0: // 0 ws
+            case 1: // 1 xmlFile
+                loadDanmaku();
+                break;
+            default: // 2 none
+                break;
         };
 
-        if (opts.hasOwnProperty('xmlPath') || (opts.hasOwnProperty('port') && opts.hasOwnProperty('uuid'))) {
-            danmakuOpts = opts;
-            loadDanmaku();
-        };
+        initMenuItems();
     };
 };
 
@@ -151,19 +154,19 @@ function requestNewUrl(quality, line) {
 };
 
 // Init MainMenu Item.
-item.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
+danmakuMenuItem.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
     let path = await iina.utils.chooseFile('Select Danmaku File...', {'chooseDir': false, 'allowedFileTypes': ['xml']});
-    danmakuOpts = {'xmlPath': path};
+    iinaPlusOpts = {'xmlPath': path, 'type': 1};
     loadDanmaku();
 }));
 
-item.addSubMenuItem(menu.separator());
+danmakuMenuItem.addSubMenuItem(menu.separator());
 
-item.addSubMenuItem(menu.item("Show / Hide Danmaku", () => {
+danmakuMenuItem.addSubMenuItem(menu.item("Show / Hide Danmaku", () => {
     overlayShowing ? hideOverlay() : showOverlay();
 }));
 
-menu.addItem(item);
+menu.addItem(danmakuMenuItem);
 
 function loadDanmaku() {
     if (!danmakuWebLoaded) {
@@ -182,20 +185,19 @@ function unloadDanmaku() {
 };
 
 function initDanmakuWeb() {
-    if (!danmakuOpts) {
-        return;
+    switch (iinaPlusOpts.type) {
+        case 0:
+            break;
+        case 1:
+            iinaPlusOpts.xmlContent = loadXMLFile(iinaPlusOpts.xmlPath);
+            break;
+        default:
+            return;
     };
 
-    if (danmakuOpts.hasOwnProperty('xmlPath')) {
-        isLiving = false;
-        danmakuOpts.xmlContent = loadXMLFile(danmakuOpts.xmlPath);
-    } else {
-        isLiving = true;
-    };
-
-    danmakuOpts.dmOpacity = iina.preferences.get('dmOpacity') ?? defaultPreferences.dmOpacity;
-    danmakuOpts.dmSpeed = iina.preferences.get('dmSpeed') ?? defaultPreferences.dmSpeed;
-    danmakuOpts.dmFont = iina.preferences.get('dmFont') ?? defaultPreferences.dmFont;
+    iinaPlusOpts.dmOpacity = iina.preferences.get('dmOpacity') ?? defaultPreferences.dmOpacity;
+    iinaPlusOpts.dmSpeed = iina.preferences.get('dmSpeed') ?? defaultPreferences.dmSpeed;
+    iinaPlusOpts.dmFont = iina.preferences.get('dmFont') ?? defaultPreferences.dmFont;
 
     var blockList = [];
     if ((iina.preferences.get('blockTypeScroll') ?? 0) == 1) {
@@ -213,20 +215,16 @@ function initDanmakuWeb() {
     if ((iina.preferences.get('blockTypeAdvanced') ?? 0) == 1) {
         blockList.push('Advanced');
     };
-    danmakuOpts.blockType = blockList.join(',');
+    iinaPlusOpts.blockType = blockList.join(',');
 
-    danmakuOpts.mpvArgs = undefined;
-    danmakuOpts.xmlPath = undefined;
 
-    if (danmakuOpts.hasOwnProperty('xmlPath') || (danmakuOpts.hasOwnProperty('port') && danmakuOpts.hasOwnProperty('uuid'))) {
-        print('initDM.');
-        showOverlay(false);
-        overlay.postMessage("initDM", danmakuOpts);
-        danmakuWebInited = true;
-    };
+    print('initDM.');
+    showOverlay(false);
+    overlay.postMessage("initDM", iinaPlusOpts);
+    danmakuWebInited = true;
+    print('initDM....');
 
     setObserver(true);
-    danmakuOpts = undefined;
 };
 
 iina.event.on("iina.plugin-overlay-loaded", () => {
@@ -236,11 +234,10 @@ iina.event.on("iina.plugin-overlay-loaded", () => {
 
 iina.event.on("iina.window-will-close", () => {
     print('iina.window-will-close');
-    danmakuOpts = undefined;
+    iinaPlusOpts = undefined;
     optsParsed = false;
     removeOpts();
     unloadDanmaku();
-    isLiving = false;
     overlayShowing = false;
     mpvPaused = false;
     danmakuWebInited = false;
@@ -289,7 +286,7 @@ function setObserver(start) {
     if (start && !mpvPaused && danmakuWebLoaded && danmakuWebInited && overlayShowing) {
         print('Start Observers.');
         stop();
-        if (!isLiving) {
+        if (iinaPlusOpts.type == 1) {
             timePosListenerID = iina.event.on(timePosKey, (t) => {
                 overlay.postMessage("timeChanged", {'time': t});
             });
