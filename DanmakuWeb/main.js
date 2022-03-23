@@ -1,33 +1,36 @@
 $ = function(a) {
     return document.getElementById(a);
 };
-var isLiving = true;
 var defWidth = 680;
-var uuid = '';
+var rawUrl;
+var dmType;
 
 function hexToString(hex) {
     return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
 };
 
 iina.onMessage("initDM", (opts) => {
+    dmType = opts.type;
     defWidth = opts.dmSpeed;
 
     window.bind();
     window.initDM();
 
+    switch(dmType) {
+        case 0:
+            rawUrl = opts.rawUrl;
+            initWebsocket(opts.port);
+            break;
+        case 1:
+            window.loadDM(hexToString(opts.xmlContent), 'iina-danmaku');
+            break;
+        default:
+            return;
+    };
+
     // Block unknown types.
     // https://github.com/jabbany/CommentCoreLibrary/issues/97
     window.cm.filter.allowUnknownTypes = false;
-
-
-    if (opts.hasOwnProperty('xmlContent')) {
-        window.loadDM(hexToString(opts.xmlContent), 'iina-danmaku');
-    };
-
-    if (opts.hasOwnProperty('port') && opts.hasOwnProperty('uuid')) {
-        initWebsocket(opts.uuid, opts.port);
-    };
-
     window.cm.options.global.opacity = opts.dmOpacity;
 
     blockDmType(opts.blockType);
@@ -226,7 +229,7 @@ function start(websocketServerLocation){
     updateStatus('warning');
     ws.onopen = function(evt) { 
         updateStatus();
-        ws.send(uuid);
+        ws.send('iinaDM://' + rawUrl);
     };
     ws.onmessage = function(evt) { 
         var event = JSON.parse(evt.data);
@@ -254,10 +257,10 @@ function start(websocketServerLocation){
 
     };
     ws.onclose = function(){
-        if (isLiving) {
+        if (dmType == 0) {
             updateStatus('warning');
             // Try to reconnect in 1 seconds
-            setTimeout(function(){start(websocketServerLocation)}, 1000);
+            setTimeout(function(){start(websocketServerLocation)}, 1500);
         }
     };
 }
@@ -274,11 +277,10 @@ function start(websocketServerLocation){
 //     window.cm.send(comment);
 // };
 
-function initWebsocket(id, port){
-    uuid = id;
+function initWebsocket(port){
     if (port === undefined){
         port = 19080;
     }
     start('ws://127.0.0.1:' + port + '/danmaku-websocket');
-    console.log('initWebsocket', id);
+    console.log('initWebsocket');
 }
