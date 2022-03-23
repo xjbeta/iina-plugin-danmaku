@@ -97,6 +97,31 @@ function parseOpts() {
     };
 };
 
+function initMenuItems() {
+    menu.removeAllItems();
+    menu.addItem(danmakuMenuItem);
+
+    const qualityItem = menu.item("Qualitys");
+    iinaPlusOpts.qualitys.forEach((element, index) => {
+        qualityItem.addSubMenuItem(menu.item(element, () => {
+            requestNewUrl(element, iinaPlusOpts.currentLine)
+        }, {
+            selected: index == iinaPlusOpts.currentQuality
+        }));
+    });
+    menu.addItem(qualityItem);
+
+    const lineItem = menu.item("Lines");
+    iinaPlusOpts.lines.forEach((element, index) => {
+        lineItem.addSubMenuItem(menu.item(element, () => {
+            requestNewUrl(iinaPlusOpts.qualitys[iinaPlusOpts.currentQuality], index)
+        }, {
+            selected: index == iinaPlusOpts.currentLine
+        }));
+    });
+    menu.addItem(lineItem);
+};
+
 // Init MainMenu Item.
 item.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
     let path = await iina.utils.chooseFile('Select Danmaku File...', {'chooseDir': false, 'allowedFileTypes': ['xml']});
