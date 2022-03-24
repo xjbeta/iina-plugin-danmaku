@@ -16,8 +16,10 @@
         "menu-items",
         "video-overlay",
         "call-process",
-        "file-system"
+        "file-system",
+        "network-request"
     ],
+    "allowedDomains": ["127.0.0.1"],
     "preferencesPage": "pref.html",
     "preferenceDefaults": {
         "keyNum": 10,
