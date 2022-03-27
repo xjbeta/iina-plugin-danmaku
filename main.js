@@ -185,6 +185,10 @@ function unloadDanmaku() {
 };
 
 function initDanmakuWeb() {
+    if (iinaPlusOpts == undefined) {
+        return;
+    };
+    
     switch (iinaPlusOpts.type) {
         case 0:
             break;
