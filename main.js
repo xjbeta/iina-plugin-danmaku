@@ -1,7 +1,6 @@
 /// <reference path="node_modules/iina-plugin-definition/iina/index.d.ts" />
 
 const { core, console, event, mpv, http, menu, overlay, preferences, utils, file } = iina;
-const danmakuMenuItem = menu.item("Danmaku");
 
 const instanceID = (Math.random() + 1).toString(36).substring(3);
 
@@ -102,7 +101,31 @@ function parseOpts() {
 
 function initMenuItems() {
     menu.removeAllItems();
+    const danmakuMenuItem = menu.item("Danmaku");
+    // Init MainMenu Item.
+    danmakuMenuItem.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
+        let path = await iina.utils.chooseFile('Select Danmaku File...', {
+            'chooseDir': false,
+            'allowedFileTypes': ['xml']
+        });
+        iinaPlusOpts = {
+            'xmlPath': path,
+            'type': 1
+        };
+        loadDanmaku();
+    }));
+
+    danmakuMenuItem.addSubMenuItem(menu.separator());
+
+    danmakuMenuItem.addSubMenuItem(menu.item("Show / Hide Danmaku", () => {
+        overlayShowing ? hideOverlay() : showOverlay();
+    }));
+
     menu.addItem(danmakuMenuItem);
+
+    if (iinaPlusOpts.qualitys == undefined) {
+        return;
+    };
 
     const qualityItem = menu.item("Qualitys");
     iinaPlusOpts.qualitys.forEach((element, index) => {
@@ -113,6 +136,10 @@ function initMenuItems() {
         }));
     });
     menu.addItem(qualityItem);
+
+    if (iinaPlusOpts.lines == undefined) {
+        return;
+    };
 
     const lineItem = menu.item("Lines");
     iinaPlusOpts.lines.forEach((element, index) => {
@@ -152,21 +179,6 @@ function requestNewUrl(quality, line) {
         console.log(response)
     })
 };
-
-// Init MainMenu Item.
-danmakuMenuItem.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
-    let path = await iina.utils.chooseFile('Select Danmaku File...', {'chooseDir': false, 'allowedFileTypes': ['xml']});
-    iinaPlusOpts = {'xmlPath': path, 'type': 1};
-    loadDanmaku();
-}));
-
-danmakuMenuItem.addSubMenuItem(menu.separator());
-
-danmakuMenuItem.addSubMenuItem(menu.item("Show / Hide Danmaku", () => {
-    overlayShowing ? hideOverlay() : showOverlay();
-}));
-
-menu.addItem(danmakuMenuItem);
 
 function loadDanmaku() {
     if (!danmakuWebLoaded) {
@@ -258,6 +270,7 @@ iina.event.on("iina.file-started", () => {
     let e = iina.preferences.get('enableIINAPLUSOptsParse') ?? defaultPreferences.enableIINAPLUSOptsParse;
     if (e == 0) {
         print('Ignore IINA+ Opts Parse')
+        initMenuItems();
         return;
     }
     parseOpts();
