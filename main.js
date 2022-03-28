@@ -158,6 +158,8 @@ function requestNewUrl(quality, line) {
     let u = 'http://127.0.0.1:'+iinaPlusOpts.port+'/video';
     let pars = {'url': iinaPlusOpts.rawUrl, 'key': quality, 'pluginAPI': '1'};
 
+    let timePos = iina.mpv.getNumber('time-pos')
+
     iina.http.get(u, {params: pars}).then((response) => {
         let re = JSON.parse(hexToString(response.text));
         let urls = re.urls;
@@ -171,7 +173,11 @@ function requestNewUrl(quality, line) {
         iinaPlusOpts.qualitys = re.qualitys;
         iinaPlusOpts.currentQuality = re.qualitys.indexOf(quality);
         iinaPlusOpts.lines = re.lines;
-        iinaPlusOpts.currentLine = line
+        iinaPlusOpts.currentLine = line;
+
+        if (iinaPlusOpts.type != 0 && re.mpvScript != undefined) {
+            re.mpvScript += ',start=' + timePos;
+        };
 
         mpv.command('loadfile', [url, 'replace', re.mpvScript]);
         initMenuItems();
