@@ -5,6 +5,8 @@ var defWidth = 680;
 var rawUrl;
 var dmType;
 
+var cmTime = 0;
+
 function hexToString(hex) {
     return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
 };
@@ -54,6 +56,10 @@ iina.onMessage("sendDM", (t) => {
 });
 
 iina.onMessage("timeChanged", (t) => {
+    if (Math.abs(cmTime - t.time) > 5.5) {
+        window.cm.clear();
+    };
+    cmTime = t.time;
     window.cm.time(Math.floor(t.time * 1000));
 });
 iina.onMessage("pauseChanged", (t) => {
