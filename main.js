@@ -69,7 +69,7 @@ function removeOpts() {
 };
 
 function parseOpts() {
-    if (optsParsed) {
+    if (optsParsed || mpv.getString('path') != "-") {
         removeOpts();
         return;
     };
