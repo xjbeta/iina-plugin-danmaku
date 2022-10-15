@@ -256,7 +256,9 @@ function start(websocketServerLocation){
                     'stime': 0,
                     'mode': 1,
                     'color': 0xffffff,
-                    'border': false
+                    'border': false,
+                    'imageSrc': event.imageSrc,
+                    'imageWidth': event.imageWidth
                 };
                 window.cm.send(comment);
             }
