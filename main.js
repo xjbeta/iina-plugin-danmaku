@@ -13,6 +13,8 @@ var overlayShowing = false;
 var mpvPaused = false;
 var danmakuWebInited = false;
 
+var stopped = true;
+
 let defaultPreferences = {
     dmOpacity: 1,
     dmSpeed: 680,
@@ -77,7 +79,7 @@ function parseOpts() {
     let scriptOpts = mpv.getString('script-opts').split(',');
 
     let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
-    if (iinaPlusValue) {
+    if (iinaPlusValue && !stopped) {
         optsParsed = true;
 
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
@@ -256,6 +258,7 @@ iina.event.on("iina.plugin-overlay-loaded", () => {
 
 iina.event.on("iina.window-will-close", () => {
     print('iina.window-will-close');
+    stopped = true;
     iinaPlusOpts = undefined;
     optsParsed = false;
     removeOpts();
@@ -272,7 +275,7 @@ iina.event.on("iina.pip.changed", (pip) => {
 
 iina.event.on("iina.file-started", () => {
     print('iina.file-started');
-
+    stopped = false;
     let e = iina.preferences.get('enableIINAPLUSOptsParse') ?? defaultPreferences.enableIINAPLUSOptsParse;
     if (e == 0) {
         print('Ignore IINA+ Opts Parse')
