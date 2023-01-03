@@ -239,7 +239,7 @@ function start(websocketServerLocation){
     updateStatus('warning');
     ws.onopen = function(evt) { 
         updateStatus();
-        ws.send('iinaDM://' + rawUrl);
+        ws.send('iinaDM://' + 'v=1&' + rawUrl);
     };
     ws.onmessage = function(evt) { 
         var event = JSON.parse(evt.data);
@@ -250,19 +250,24 @@ function start(websocketServerLocation){
         
         switch(event.method) {
         case 'sendDM':
-            if (document.visibilityState == 'visible') {
-                var comment = {
-                    'text': event.text,
-                    'stime': 0,
-                    'mode': 1,
-                    'color': 0xffffff,
-                    'border': false,
-                    'imageSrc': event.imageSrc,
-                    'imageWidth': event.imageWidth
-                };
-                window.cm.send(comment);
+            if (document.visibilityState != 'visible') {
+                return;
             }
-            break
+                
+            event.dms.forEach(function(element, index) {
+                setTimeout(function () {
+                    var comment = {
+                        'text': element.text,
+                        'stime': 0,
+                        'mode': 1,
+                        'color': 0xffffff,
+                        'border': false,
+                        'imageSrc': element.imageSrc,
+                        'imageWidth': element.imageWidth
+                    };
+                    window.cm.send(comment);
+                }, index * 150);
+            });
         default:
             break;
         }
