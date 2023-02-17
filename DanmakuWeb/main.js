@@ -39,6 +39,10 @@ iina.onMessage("initDM", (opts) => {
 
     let newCSS = ".customFont {color: #fff;font-family: '"+ opts.dmFont +"',SimHei,SimSun,monospace;font-size: 24px;letter-spacing: 0;line-height: 100%;margin: 0;padding: 3px 0 0 0;position: absolute;text-decoration: none;text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;-webkit-text-size-adjust: none;-ms-text-size-adjust: none;text-size-adjust: none;-webkit-transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);-webkit-transform-origin: 0% 0%;-ms-transform-origin: 0% 0%;transform-origin: 0% 0%;white-space: pre;word-break: keep-all;}}"
     window.customFont(newCSS);
+
+    setTimeout(function () {
+        window.cmResize();
+    }, 1000);
 });
 
 iina.onMessage("resizeWindow", () => {
@@ -235,7 +239,7 @@ function start(websocketServerLocation){
     updateStatus('warning');
     ws.onopen = function(evt) { 
         updateStatus();
-        ws.send('iinaDM://' + rawUrl);
+        ws.send('iinaDM://' + 'v=1&' + rawUrl);
     };
     ws.onmessage = function(evt) { 
         var event = JSON.parse(evt.data);
@@ -246,17 +250,24 @@ function start(websocketServerLocation){
         
         switch(event.method) {
         case 'sendDM':
-            if (document.visibilityState == 'visible') {
-                var comment = {
-                    'text': event.text,
-                    'stime': 0,
-                    'mode': 1,
-                    'color': 0xffffff,
-                    'border': false
-                };
-                window.cm.send(comment);
+            if (document.visibilityState != 'visible') {
+                return;
             }
-            break
+                
+            event.dms.forEach(function(element, index) {
+                setTimeout(function () {
+                    var comment = {
+                        'text': element.text,
+                        'stime': 0,
+                        'mode': 1,
+                        'color': 0xffffff,
+                        'border': false,
+                        'imageSrc': element.imageSrc,
+                        'imageWidth': element.imageWidth
+                    };
+                    window.cm.send(comment);
+                }, index * 150);
+            });
         default:
             break;
         }
