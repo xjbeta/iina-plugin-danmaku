@@ -277,12 +277,13 @@ iina.event.on("iina.file-started", () => {
     print('iina.file-started');
     stopped = false;
     let e = iina.preferences.get('enableIINAPLUSOptsParse') ?? defaultPreferences.enableIINAPLUSOptsParse;
-    if (e == 0) {
-        print('Ignore IINA+ Opts Parse')
-        initMenuItems();
+
+    if (e != 0 && mpv.getString('path') == "-") {
+        parseOpts();
         return;
     }
-    parseOpts();
+    print('Ignore IINA+ Opts Parse')
+    initMenuItems();
 });
 
 iina.event.on("mpv.pause.changed", (isPaused) => {
