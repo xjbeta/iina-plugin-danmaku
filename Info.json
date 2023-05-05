@@ -1,7 +1,7 @@
 {
     "name": "Danmaku",
     "identifier": "com.xjbeta.danmaku",
-    "version": "0.1.0",
+    "version": "0.1.5",
     "ghVersion": 2,
     "ghRepo": "xjbeta/iina-plugin-danmaku",
     "description": "IINA Danmaku",
@@ -11,6 +11,7 @@
         "url": "https://github.com/xjbeta"
     },
     "entry": "main.js",
+    "globalEntry": "global.js",
     "permissions": [
         "show-osd",
         "menu-items",
@@ -22,8 +23,9 @@
     "allowedDomains": ["127.0.0.1"],
     "preferencesPage": "pref.html",
     "preferenceDefaults": {
-        "keyNum": 10,
-        "keyString": "hello",
-        "keyBool": true
+        "dmOpacity": 1,
+        "dmSpeed": 680,
+        "dmFont": "PingFang SC",
+        "enableIINAPLUSOptsParse": 0
     }
 }
