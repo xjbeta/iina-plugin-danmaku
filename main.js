@@ -15,13 +15,6 @@ var danmakuWebInited = false;
 
 var stopped = true;
 
-let defaultPreferences = {
-    dmOpacity: 1,
-    dmSpeed: 680,
-    dmFont: 'PingFang SC',
-    enableIINAPLUSOptsParse: 0
-};
-
 function print(str) {
     console.log('[' + instanceID + '] ' + str);
 };
@@ -219,9 +212,9 @@ function initDanmakuWeb() {
             return;
     };
 
-    iinaPlusOpts.dmOpacity = iina.preferences.get('dmOpacity') ?? defaultPreferences.dmOpacity;
-    iinaPlusOpts.dmSpeed = iina.preferences.get('dmSpeed') ?? defaultPreferences.dmSpeed;
-    iinaPlusOpts.dmFont = iina.preferences.get('dmFont') ?? defaultPreferences.dmFont;
+    iinaPlusOpts.dmOpacity = iina.preferences.get('dmOpacity');
+    iinaPlusOpts.dmSpeed = iina.preferences.get('dmSpeed');
+    iinaPlusOpts.dmFont = iina.preferences.get('dmFont');
 
     var blockList = [];
     if ((iina.preferences.get('blockTypeScroll') ?? 0) == 1) {
@@ -276,7 +269,7 @@ iina.event.on("iina.pip.changed", (pip) => {
 iina.event.on("iina.file-started", () => {
     print('iina.file-started');
     stopped = false;
-    let e = iina.preferences.get('enableIINAPLUSOptsParse') ?? defaultPreferences.enableIINAPLUSOptsParse;
+    let e = iina.preferences.get('enableIINAPLUSOptsParse');
 
     if (e != 0 && mpv.getString('path') == "-") {
         parseOpts();

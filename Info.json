@@ -23,8 +23,9 @@
     "allowedDomains": ["127.0.0.1"],
     "preferencesPage": "pref.html",
     "preferenceDefaults": {
-        "keyNum": 10,
-        "keyString": "hello",
-        "keyBool": true
+        "dmOpacity": 1,
+        "dmSpeed": 680,
+        "dmFont": "PingFang SC",
+        "enableIINAPLUSOptsParse": 0
     }
 }
