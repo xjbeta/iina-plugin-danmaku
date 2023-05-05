@@ -11,6 +11,7 @@
         "url": "https://github.com/xjbeta"
     },
     "entry": "main.js",
+    "globalEntry": "global.js",
     "permissions": [
         "show-osd",
         "menu-items",
