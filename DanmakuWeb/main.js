@@ -72,6 +72,12 @@ iina.onMessage("pauseChanged", (t) => {
 iina.onMessage("close", () => {
     cm.clear;
     cm.stop;
+    window._provider.destroy();
+    ws.onclose = function(){};
+    ws.close();
+    rawUrl = undefined;
+    dmType = undefined;
+    updateStatus('');
 });
 
 function bind() {
