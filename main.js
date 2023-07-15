@@ -8,12 +8,10 @@ let iinaPlusArgsKey = 'iinaPlusArgs=';
 var iinaPlusOpts;
 var optsParsed = false;
 
-var danmakuWebLoaded = false;
 var overlayShowing = false;
+var overlayLoaded = false;
 var mpvPaused = false;
 var danmakuWebInited = false;
-
-var stopped = true;
 
 function print(str) {
     console.log('[' + instanceID + '] ' + str);
@@ -41,7 +39,6 @@ function hideOverlay(osc=true) {
 
 function loadXMLFile(path) {
     print('loadXMLFile.' + 'path: ' + path);
-    loadDanmaku();
     const content = iina.file.read(path);
     return stringToHex(content);
 };
@@ -72,7 +69,7 @@ function parseOpts() {
     let scriptOpts = mpv.getString('script-opts').split(',');
 
     let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
-    if (iinaPlusValue && !stopped) {
+    if (iinaPlusValue && !danmakuWebInited) {
         optsParsed = true;
 
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
@@ -81,16 +78,12 @@ function parseOpts() {
         mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', opts.mpvScript]);
         iinaPlusOpts = opts;
         iinaPlusOpts.mpvScript = undefined;
-        switch(opts.type) {
-            case 0: // 0 ws
-            case 1: // 1 xmlFile
-                loadDanmaku();
-                break;
-            default: // 2 none
-                break;
-        };
 
         initMenuItems();
+
+        if (overlayLoaded) {
+            initDanmakuWeb();
+        };
     };
 };
 
@@ -107,7 +100,10 @@ function initMenuItems() {
             'xmlPath': path,
             'type': 1
         };
-        loadDanmaku();
+
+        if (overlayLoaded) {
+            initDanmakuWeb();
+        };
     }));
 
     danmakuMenuItem.addSubMenuItem(menu.separator());
@@ -181,20 +177,12 @@ function requestNewUrl(quality, line) {
     })
 };
 
-function loadDanmaku() {
-    // if (!danmakuWebLoaded) {
-    //     print('loadDanmaku');
-    //     overlay.loadFile("DanmakuWeb/index.htm");
-    //     danmakuWebLoaded = true;
-    // };
-};
 
-function unloadDanmaku() {
-    // if (danmakuWebLoaded) {
-    //     print('unloadDanmaku');
-    //     overlay.simpleMode();
-    //     danmakuWebLoaded = false;
-    // };
+function stopDanmaku() {
+    print('stopDanmaku');
+    overlay.postMessage("close", {});
+    danmakuWebInited = false;
+    setObserver(false);
 };
 
 function initDanmakuWeb() {
@@ -245,29 +233,26 @@ function initDanmakuWeb() {
 };
 
 
-
 iina.event.on("iina.window-loaded", () => {
     print('iina.window-loaded');
-
     overlay.loadFile("DanmakuWeb/index.htm");
-    danmakuWebLoaded = true;
 });
 
 iina.event.on("iina.plugin-overlay-loaded", () => {
     print('iina.plugin-overlay-loaded');
+    overlayLoaded = true;
     initDanmakuWeb();
 });
 
 iina.event.on("iina.window-will-close", () => {
     print('iina.window-will-close');
-    stopped = true;
     iinaPlusOpts = undefined;
     optsParsed = false;
     removeOpts();
-    unloadDanmaku();
+    stopDanmaku();
     overlayShowing = false;
     mpvPaused = false;
-    danmakuWebInited = false;
+
 });
 
 iina.event.on("iina.pip.changed", (pip) => {
@@ -277,7 +262,6 @@ iina.event.on("iina.pip.changed", (pip) => {
 
 iina.event.on("iina.file-started", () => {
     print('iina.file-started');
-    stopped = false;
     let e = iina.preferences.get('enableIINAPLUSOptsParse');
 
     if (e != 0 && mpv.getString('path') == "-") {
@@ -312,7 +296,7 @@ function setObserver(start) {
         };
     };
 
-    if (start && !mpvPaused && danmakuWebLoaded && danmakuWebInited && overlayShowing) {
+    if (start && !mpvPaused && overlayLoaded && danmakuWebInited && overlayShowing) {
         print('Start Observers.');
         stop();
         if (iinaPlusOpts.type == 1) {
@@ -324,7 +308,7 @@ function setObserver(start) {
             overlay.postMessage("resizeWindow", {});
         });
         initObserverValues();
-    } else if (!start && (mpvPaused || !danmakuWebLoaded || !overlayShowing)) {
+    } else if (!start && (mpvPaused || !overlayShowing || !danmakuWebInited)) {
         print('Stop Observers.');
         stop();
     };
