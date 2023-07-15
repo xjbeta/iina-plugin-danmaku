@@ -182,19 +182,19 @@ function requestNewUrl(quality, line) {
 };
 
 function loadDanmaku() {
-    if (!danmakuWebLoaded) {
-        print('loadDanmaku');
-        overlay.loadFile("DanmakuWeb/index.htm");
-        danmakuWebLoaded = true;
-    };
+    // if (!danmakuWebLoaded) {
+    //     print('loadDanmaku');
+    //     overlay.loadFile("DanmakuWeb/index.htm");
+    //     danmakuWebLoaded = true;
+    // };
 };
 
 function unloadDanmaku() {
-    if (danmakuWebLoaded) {
-        print('unloadDanmaku');
-        overlay.simpleMode();
-        danmakuWebLoaded = false;
-    };
+    // if (danmakuWebLoaded) {
+    //     print('unloadDanmaku');
+    //     overlay.simpleMode();
+    //     danmakuWebLoaded = false;
+    // };
 };
 
 function initDanmakuWeb() {
@@ -243,6 +243,15 @@ function initDanmakuWeb() {
 
     setObserver(true);
 };
+
+
+
+iina.event.on("iina.window-loaded", () => {
+    print('iina.window-loaded');
+
+    overlay.loadFile("DanmakuWeb/index.htm");
+    danmakuWebLoaded = true;
+});
 
 iina.event.on("iina.plugin-overlay-loaded", () => {
     print('iina.plugin-overlay-loaded');
