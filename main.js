@@ -114,7 +114,11 @@ function initMenuItems() {
 
     menu.addItem(danmakuMenuItem);
 
-    if (iinaPlusOpts.qualitys == undefined) {
+    if (iinaPlusOpts === undefined) {
+        return;
+    };
+
+    if (iinaPlusOpts.qualitys === undefined) {
         return;
     };
 
@@ -128,7 +132,7 @@ function initMenuItems() {
     });
     menu.addItem(qualityItem);
 
-    if (iinaPlusOpts.lines == undefined) {
+    if (iinaPlusOpts.lines === undefined) {
         return;
     };
 
@@ -186,7 +190,7 @@ function stopDanmaku() {
 };
 
 function initDanmakuWeb() {
-    if (iinaPlusOpts == undefined) {
+    if (iinaPlusOpts === undefined) {
         return;
     };
     
