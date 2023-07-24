@@ -252,6 +252,8 @@ iina.event.on("iina.window-will-close", () => {
     print('iina.window-will-close');
     iinaPlusOpts = undefined;
     optsParsed = false;
+    mpv.command('stop');
+    iina.core.stop();
     removeOpts();
     stopDanmaku();
     overlayShowing = false;
