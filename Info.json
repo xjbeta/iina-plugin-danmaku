@@ -14,9 +14,7 @@
     "globalEntry": "global.js",
     "permissions": [
         "show-osd",
-        "menu-items",
         "video-overlay",
-        "call-process",
         "file-system",
         "network-request"
     ],
