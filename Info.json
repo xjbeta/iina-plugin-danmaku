@@ -24,6 +24,12 @@
         "dmOpacity": 1,
         "dmSpeed": 680,
         "dmFont": "PingFang SC",
-        "enableIINAPLUSOptsParse": 0
+        "enableIINAPLUSOptsParse": 0,
+
+        "blockTypeScroll": 0,
+        "blockTypeTop": 0,
+        "blockTypeBottom": 0,
+        "blockTypeColor": 0,
+        "blockTypeAdvanced": 0
     }
 }
