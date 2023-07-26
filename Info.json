@@ -1,8 +1,8 @@
 {
     "name": "Danmaku",
     "identifier": "com.xjbeta.danmaku",
-    "version": "0.1.7",
-    "ghVersion": 4,
+    "version": "0.1.8",
+    "ghVersion": 5,
     "ghRepo": "xjbeta/iina-plugin-danmaku",
     "description": "IINA Danmaku",
     "author": {
