@@ -114,7 +114,11 @@ function initMenuItems() {
 
     menu.addItem(danmakuMenuItem);
 
-    if (iinaPlusOpts.qualitys == undefined) {
+    if (iinaPlusOpts === undefined) {
+        return;
+    };
+
+    if (iinaPlusOpts.qualitys === undefined) {
         return;
     };
 
@@ -128,7 +132,7 @@ function initMenuItems() {
     });
     menu.addItem(qualityItem);
 
-    if (iinaPlusOpts.lines == undefined) {
+    if (iinaPlusOpts.lines === undefined) {
         return;
     };
 
@@ -186,7 +190,7 @@ function stopDanmaku() {
 };
 
 function initDanmakuWeb() {
-    if (iinaPlusOpts == undefined) {
+    if (iinaPlusOpts === undefined) {
         return;
     };
     
@@ -205,19 +209,19 @@ function initDanmakuWeb() {
     iinaPlusOpts.dmFont = iina.preferences.get('dmFont');
 
     var blockList = [];
-    if ((iina.preferences.get('blockTypeScroll') ?? 0) == 1) {
+    if (iina.preferences.get('blockTypeScroll') == 1) {
         blockList.push('Scroll');
     };
-    if ((iina.preferences.get('blockTypeTop') ?? 0) == 1) {
+    if (iina.preferences.get('blockTypeTop') == 1) {
         blockList.push('Top');
     };
-    if ((iina.preferences.get('blockTypeButtom') ?? 0) == 1) {
+    if (iina.preferences.get('blockTypeBottom') == 1) {
         blockList.push('Bottom');
     };
-    if ((iina.preferences.get('blockTypeColor') ?? 0) == 1) {
+    if (iina.preferences.get('blockTypeColor') == 1) {
         blockList.push('Color');
     };
-    if ((iina.preferences.get('blockTypeAdvanced') ?? 0) == 1) {
+    if (iina.preferences.get('blockTypeAdvanced') == 1) {
         blockList.push('Advanced');
     };
     iinaPlusOpts.blockType = blockList.join(',');
@@ -248,6 +252,8 @@ iina.event.on("iina.window-will-close", () => {
     print('iina.window-will-close');
     iinaPlusOpts = undefined;
     optsParsed = false;
+    mpv.command('stop');
+    iina.core.stop();
     removeOpts();
     stopDanmaku();
     overlayShowing = false;
