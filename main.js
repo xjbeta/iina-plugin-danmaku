@@ -64,7 +64,7 @@ function removeOpts() {
 };
 
 function parseOpts() {
-    if (optsParsed || mpv.getString('path') != "-") {
+    if (optsParsed) {
         removeOpts();
         return;
     };
@@ -78,7 +78,6 @@ function parseOpts() {
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
 
-        mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', opts.mpvScript]);
         iinaPlusOpts = opts;
         iinaPlusOpts.mpvScript = undefined;
         switch(opts.type) {
@@ -275,12 +274,7 @@ iina.event.on("iina.file-started", () => {
     stopped = false;
     let e = iina.preferences.get('enableIINAPLUSOptsParse');
 
-    if (e != 0 && mpv.getString('path') == "-") {
     parseOpts();
-        return;
-    }
-    print('Ignore IINA+ Opts Parse')
-    initMenuItems();
 });
 
 iina.event.on("mpv.pause.changed", (isPaused) => {
