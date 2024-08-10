@@ -8,10 +8,12 @@ let iinaPlusArgsKey = 'iinaPlusArgs=';
 var iinaPlusOpts;
 var optsParsed = false;
 
+var danmakuWebLoaded = false;
 var overlayShowing = false;
-var overlayLoaded = false;
 var mpvPaused = false;
 var danmakuWebInited = false;
+
+var stopped = true;
 
 function print(str) {
     console.log('[' + instanceID + '] ' + str);
@@ -39,6 +41,7 @@ function hideOverlay(osc=true) {
 
 function loadXMLFile(path) {
     print('loadXMLFile.' + 'path: ' + path);
+    loadDanmaku();
     const content = iina.file.read(path);
     return stringToHex(content);
 };
@@ -61,7 +64,7 @@ function removeOpts() {
 };
 
 function parseOpts() {
-    if (optsParsed || mpv.getString('path') != "-") {
+    if (optsParsed) {
         removeOpts();
         return;
     };
@@ -69,21 +72,24 @@ function parseOpts() {
     let scriptOpts = mpv.getString('script-opts').split(',');
 
     let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
-    if (iinaPlusValue && !danmakuWebInited) {
+    if (iinaPlusValue && !stopped) {
         optsParsed = true;
 
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
 
-        mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', opts.mpvScript]);
         iinaPlusOpts = opts;
         iinaPlusOpts.mpvScript = undefined;
+        switch(opts.type) {
+            case 0: // 0 ws
+            case 1: // 1 xmlFile
+                loadDanmaku();
+                break;
+            default: // 2 none
+                break;
+        };
 
         initMenuItems();
-
-        if (overlayLoaded) {
-            initDanmakuWeb();
-        };
     };
 };
 
@@ -100,10 +106,7 @@ function initMenuItems() {
             'xmlPath': path,
             'type': 1
         };
-
-        if (overlayLoaded) {
-            initDanmakuWeb();
-        };
+        loadDanmaku();
     }));
 
     danmakuMenuItem.addSubMenuItem(menu.separator());
@@ -181,12 +184,20 @@ function requestNewUrl(quality, line) {
     })
 };
 
+function loadDanmaku() {
+    if (!danmakuWebLoaded) {
+        print('loadDanmaku');
+        overlay.loadFile("DanmakuWeb/index.htm");
+        danmakuWebLoaded = true;
+    };
+};
 
-function stopDanmaku() {
-    print('stopDanmaku');
-    overlay.postMessage("close", {});
-    danmakuWebInited = false;
-    setObserver(false);
+function unloadDanmaku() {
+    if (danmakuWebLoaded) {
+        print('unloadDanmaku');
+        overlay.simpleMode();
+        danmakuWebLoaded = false;
+    };
 };
 
 function initDanmakuWeb() {
@@ -236,29 +247,21 @@ function initDanmakuWeb() {
     setObserver(true);
 };
 
-
-iina.event.on("iina.window-loaded", () => {
-    print('iina.window-loaded');
-    overlay.loadFile("DanmakuWeb/index.htm");
-});
-
 iina.event.on("iina.plugin-overlay-loaded", () => {
     print('iina.plugin-overlay-loaded');
-    overlayLoaded = true;
     initDanmakuWeb();
 });
 
 iina.event.on("iina.window-will-close", () => {
     print('iina.window-will-close');
+    stopped = true;
     iinaPlusOpts = undefined;
     optsParsed = false;
-    mpv.command('stop');
-    iina.core.stop();
     removeOpts();
-    stopDanmaku();
+    unloadDanmaku();
     overlayShowing = false;
     mpvPaused = false;
-
+    danmakuWebInited = false;
 });
 
 iina.event.on("iina.pip.changed", (pip) => {
@@ -268,14 +271,10 @@ iina.event.on("iina.pip.changed", (pip) => {
 
 iina.event.on("iina.file-started", () => {
     print('iina.file-started');
+    stopped = false;
     let e = iina.preferences.get('enableIINAPLUSOptsParse');
 
-    if (e != 0 && mpv.getString('path') == "-") {
-        parseOpts();
-        return;
-    }
-    print('Ignore IINA+ Opts Parse')
-    initMenuItems();
+    parseOpts();
 });
 
 iina.event.on("mpv.pause.changed", (isPaused) => {
@@ -302,7 +301,7 @@ function setObserver(start) {
         };
     };
 
-    if (start && !mpvPaused && overlayLoaded && danmakuWebInited && overlayShowing) {
+    if (start && !mpvPaused && danmakuWebLoaded && danmakuWebInited && overlayShowing) {
         print('Start Observers.');
         stop();
         if (iinaPlusOpts.type == 1) {
@@ -314,7 +313,7 @@ function setObserver(start) {
             overlay.postMessage("resizeWindow", {});
         });
         initObserverValues();
-    } else if (!start && (mpvPaused || !overlayShowing || !danmakuWebInited)) {
+    } else if (!start && (mpvPaused || !danmakuWebLoaded || !overlayShowing)) {
         print('Stop Observers.');
         stop();
     };
