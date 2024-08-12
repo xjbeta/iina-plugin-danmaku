@@ -59,8 +59,7 @@ function hexToString(hex) {
 
 function removeOpts() {
     print('remove parsed script-opts');
-    var v = mpv.getString('script-opts').split(',').filter(o => !o.startsWith(iinaPlusArgsKey)).join(',');
-    mpv.set('script-opts', v);
+    mpv.set('script-opts', '');
 };
 
 function parseOpts() {
@@ -254,6 +253,15 @@ iina.event.on("iina.plugin-overlay-loaded", () => {
 
 iina.event.on("iina.window-will-close", () => {
     print('iina.window-will-close');
+    deinit();
+});
+
+iina.event.on("iina.window-did-close", () => {
+    print('iina.window-did-close');
+    deinit();
+});
+
+function deinit() {
     stopped = true;
     iinaPlusOpts = undefined;
     optsParsed = false;
@@ -262,7 +270,7 @@ iina.event.on("iina.window-will-close", () => {
     overlayShowing = false;
     mpvPaused = false;
     danmakuWebInited = false;
-});
+};
 
 iina.event.on("iina.pip.changed", (pip) => {
     console.log("PIP: " + pip);
