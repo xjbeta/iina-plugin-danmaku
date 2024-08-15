@@ -1,3 +1,5 @@
+const _ = import('../node_modules/comment-core-library');
+
 $ = function(a) {
     return document.getElementById(a);
 };
