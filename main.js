@@ -63,19 +63,27 @@ function removeOpts() {
 };
 
 function parseOpts() {
-    if (optsParsed) {
-        removeOpts();
+    if (optsParsed || mpv.getString('path') != "-") {
         return;
     };
 
     let scriptOpts = mpv.getString('script-opts').split(',');
-
     let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
+    
+    optsParsed = true;
+    removeOpts();
+
     if (iinaPlusValue && !stopped) {
-        optsParsed = true;
 
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
+
+        if (parseFloat(iina.core.getVersion().mpv.replace(/^.*v0\./, '')) >= 38) {
+            // v0.38.0
+            mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', '0', opts.mpvScript]);
+        } else {
+            mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', opts.mpvScript]);
+        };
 
         iinaPlusOpts = opts;
         iinaPlusOpts.mpvScript = undefined;
@@ -262,7 +270,11 @@ iina.event.on("iina.window-did-close", () => {
 });
 
 function deinit() {
+    if (stopped) {
+        return;
+    };
     stopped = true;
+    setObserver(false);
     iinaPlusOpts = undefined;
     optsParsed = false;
     removeOpts();
@@ -281,8 +293,13 @@ iina.event.on("iina.file-started", () => {
     print('iina.file-started');
     stopped = false;
     let e = iina.preferences.get('enableIINAPLUSOptsParse');
-
-    parseOpts();
+    let p = mpv.getString('path');
+    if (p == "-") {
+        parseOpts();
+        return;
+    }
+    print('Ignore IINA+ Opts Parse, ' + p);
+    initMenuItems();
 });
 
 iina.event.on("mpv.pause.changed", (isPaused) => {
