@@ -70,13 +70,20 @@ function parseOpts() {
     let scriptOpts = mpv.getString('script-opts').split(',');
     let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
     
-        optsParsed = true;
+    optsParsed = true;
     removeOpts();
 
     if (iinaPlusValue && !stopped) {
 
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
+
+        if (parseFloat(iina.core.getVersion().mpv.replace(/^.*v0\./, '')) >= 38) {
+            // v0.38.0
+            mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', '0', opts.mpvScript]);
+        } else {
+            mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', opts.mpvScript]);
+        };
 
         iinaPlusOpts = opts;
         iinaPlusOpts.mpvScript = undefined;
