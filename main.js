@@ -78,8 +78,13 @@ function parseOpts() {
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
 
-        if (parseFloat(iina.core.getVersion().mpv.replace(/^.*v0\./, '')) >= 38) {
-            // v0.38.0
+        let mpvVer = iina.core.getVersion().mpv;
+        let number = parseInt(mpvVer.match(/\.(\d+)\./)[1], 10);
+        print('mpv version: ' + mpvVer);
+        print('mpv number: ' + number);
+
+        if (number >= 38) {
+            // v0.38.0 , svp 0.39.0
             mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', '0', opts.mpvScript]);
         } else {
             mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', opts.mpvScript]);
