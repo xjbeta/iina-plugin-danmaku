@@ -63,7 +63,14 @@ function removeOpts() {
 };
 
 function parseOpts() {
-    if (optsParsed || mpv.getString('path') != "-") {
+
+    if (optsParsed) {
+        print("parseOpts ignore" + mpv.getString('path'));
+        return;
+    }
+
+    if (mpv.getString('path') != undefined && mpv.getString('path') != "-") {
+        print("parseOpts ignore" + mpv.getString('path'));
         return;
     };
 
@@ -78,8 +85,13 @@ function parseOpts() {
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
 
-        if (parseFloat(iina.core.getVersion().mpv.replace(/^.*v0\./, '')) >= 38) {
-            // v0.38.0
+        let mpvVer = iina.core.getVersion().mpv;
+        let number = parseInt(mpvVer.match(/\.(\d+)\./)[1], 10);
+        print('mpv version: ' + mpvVer);
+        print('mpv number: ' + number);
+
+        if (number >= 38) {
+            // v0.38.0 , svp 0.39.0
             mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', '0', opts.mpvScript]);
         } else {
             mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', opts.mpvScript]);
@@ -270,13 +282,13 @@ iina.event.on("iina.window-did-close", () => {
 });
 
 function deinit() {
+    optsParsed = false;
     if (stopped) {
         return;
     };
     stopped = true;
     setObserver(false);
     iinaPlusOpts = undefined;
-    optsParsed = false;
     removeOpts();
     unloadDanmaku();
     overlayShowing = false;
@@ -290,7 +302,7 @@ iina.event.on("iina.pip.changed", (pip) => {
 
 
 iina.event.on("iina.file-started", () => {
-    print('iina.file-started');
+    print('============================iina.file-started============================');
     stopped = false;
     let e = iina.preferences.get('enableIINAPLUSOptsParse');
     let p = mpv.getString('path');
