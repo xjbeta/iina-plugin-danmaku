@@ -63,7 +63,14 @@ function removeOpts() {
 };
 
 function parseOpts() {
-    if (optsParsed || mpv.getString('path') != "-") {
+
+    if (optsParsed) {
+        print("parseOpts ignore" + mpv.getString('path'));
+        return;
+    }
+
+    if (mpv.getString('path') != undefined && mpv.getString('path') != "-") {
+        print("parseOpts ignore" + mpv.getString('path'));
         return;
     };
 
@@ -275,13 +282,13 @@ iina.event.on("iina.window-did-close", () => {
 });
 
 function deinit() {
+    optsParsed = false;
     if (stopped) {
         return;
     };
     stopped = true;
     setObserver(false);
     iinaPlusOpts = undefined;
-    optsParsed = false;
     removeOpts();
     unloadDanmaku();
     overlayShowing = false;
@@ -295,7 +302,7 @@ iina.event.on("iina.pip.changed", (pip) => {
 
 
 iina.event.on("iina.file-started", () => {
-    print('iina.file-started');
+    print('============================iina.file-started============================');
     stopped = false;
     let e = iina.preferences.get('enableIINAPLUSOptsParse');
     let p = mpv.getString('path');
