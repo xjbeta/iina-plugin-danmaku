@@ -65,22 +65,26 @@ function removeOpts() {
 function parseOpts() {
 
     if (optsParsed) {
-        print("parseOpts ignore" + mpv.getString('path'));
+        print("parseOpts ignore: " + mpv.getString('path'));
         return;
     }
-
-    if (mpv.getString('path') != undefined && mpv.getString('path') != "-") {
-        print("parseOpts ignore" + mpv.getString('path'));
-        return;
-    };
 
     let scriptOpts = mpv.getString('script-opts').split(',');
     let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
     
-    optsParsed = true;
-    removeOpts();
+    let checker = mpv.getString('path')?.split('?')[1] || '';
 
-    if (iinaPlusValue && !stopped) {
+    if (checker && checker == iinaPlusValue.slice(-25)) {
+        optsParsed = true;
+        removeOpts();
+    } else {
+        print("check failed: " + checker);
+        return;
+    }
+
+    print('iinaPlusValue' + iinaPlusValue);
+
+    if (iinaPlusValue) {
 
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
@@ -107,8 +111,6 @@ function parseOpts() {
             default: // 2 none
                 break;
         };
-
-        initMenuItems();
     };
 };
 
@@ -304,13 +306,7 @@ iina.event.on("iina.pip.changed", (pip) => {
 iina.event.on("iina.file-started", () => {
     print('============================iina.file-started============================');
     stopped = false;
-    let e = iina.preferences.get('enableIINAPLUSOptsParse');
-    let p = mpv.getString('path');
-    if (p == "-") {
-        parseOpts();
-        return;
-    }
-    print('Ignore IINA+ Opts Parse, ' + p);
+    parseOpts();
     initMenuItems();
 });
 
