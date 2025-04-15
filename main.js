@@ -47,7 +47,7 @@ function loadXMLFile(path) {
 };
 
 function stringToHex(str) {
-    return Array.from(str).map(c => 
+    return Array.from(str).map(c =>
         c.charCodeAt(0) < 128 ? c.charCodeAt(0).toString(16).padStart(2, '0') :
         encodeURIComponent(c).replace(/\%/g,'').toLowerCase()
       ).join('');
@@ -225,7 +225,7 @@ function initDanmakuWeb() {
     if (iinaPlusOpts === undefined) {
         return;
     };
-    
+
     switch (iinaPlusOpts.type) {
         case 0:
             break;
@@ -308,7 +308,32 @@ iina.event.on("iina.file-started", () => {
     stopped = false;
     parseOpts();
     initMenuItems();
+    tryLoadXml();
 });
+
+function tryLoadXml() {
+    const file = iina.mpv.getString('path')
+    if (!file) return
+    if (!file.startsWith('/')) return // not a path
+
+    const basename = file.split('/').at(-1)
+    const arr = basename.split('.')
+    if (arr.length <= 1) return
+    const ext = arr.at(-1)
+
+    // /dir/video-name.mp4  ->  /dir/video-name.xml
+    const xmlFile = file.replace(new RegExp(String.raw`\.${ext}$`, 'i'), '.xml')
+    if (iina.file.exists(xmlFile)) {
+        iinaPlusOpts = {
+            'xmlPath': xmlFile,
+            'type': 1
+        };
+
+        if (overlayLoaded) {
+            initDanmakuWeb();
+        };
+    }
+}
 
 iina.event.on("mpv.pause.changed", (isPaused) => {
     overlay.postMessage("pauseChanged", {'isPaused': isPaused});
