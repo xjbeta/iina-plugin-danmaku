@@ -15,6 +15,8 @@ var danmakuWebInited = false;
 
 var stopped = true;
 
+var mpvNewLoadfileAPI = false;
+
 function print(str) {
     console.log('[' + instanceID + '] ' + str);
 };
@@ -93,13 +95,9 @@ function parseOpts() {
         let number = parseInt(mpvVer.match(/\.(\d+)\./)[1], 10);
         print('mpv version: ' + mpvVer);
         print('mpv number: ' + number);
+        mpvNewLoadfileAPI = number >= 38;
 
-        if (number >= 38) {
-            // v0.38.0 , svp 0.39.0
-            mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', '0', opts.mpvScript]);
-        } else {
-            mpv.command('loadfile', [opts.urls[opts.currentLine], 'replace', opts.mpvScript]);
-        };
+        mpvLoadfile(opts.urls[opts.currentLine], opts.mpvScript);
 
         iinaPlusOpts = opts;
         iinaPlusOpts.mpvScript = undefined;
@@ -111,6 +109,15 @@ function parseOpts() {
             default: // 2 none
                 break;
         };
+    };
+};
+
+function mpvLoadfile(url, opts) {
+    if (mpvNewLoadfileAPI) {
+        // v0.38.0 , svp 0.39.0
+        mpv.command('loadfile', [url, 'replace', '0', opts]);
+    } else {
+        mpv.command('loadfile', [url, 'replace', opts]);
     };
 };
 
@@ -198,7 +205,7 @@ function requestNewUrl(quality, line) {
             re.mpvScript += ',start=' + timePos;
         };
 
-        mpv.command('loadfile', [url, 'replace', re.mpvScript]);
+        mpvLoadfile(url, re.mpvScript);
         initMenuItems();
     }).catch((response) => {
         console.log(response)
