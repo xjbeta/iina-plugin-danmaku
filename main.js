@@ -71,25 +71,38 @@ function parseOpts() {
         return;
     }
 
-    let scriptOpts = mpv.getString('script-opts').split(',');
+    let scriptOptsRaw = mpv.getString('script-opts');
+    let scriptOpts = scriptOptsRaw.split(',');
     let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
-    
-    let checker = mpv.getString('path')?.split('?')[1] || '';
 
-    if (checker && checker == iinaPlusValue.slice(-25)) {
+    let mpvPath = mpv.getString('path');
+    let checker = mpvPath?.split('?')[1] || '';
+
+    // IINA 1.4.4+: script-opts is empty via URL scheme, so fall back to
+    // reading the full hex directly from the video.mp4 URL query string.
+    if (!iinaPlusValue && mpvPath && mpvPath.includes('video.mp4?')) {
+        let queryHex = mpvPath.split('video.mp4?')[1];
+        if (queryHex && /^[0-9a-f]+$/i.test(queryHex)) {
+            iinaPlusValue = iinaPlusArgsKey + queryHex;
+        }
+    }
+
+    if (checker && iinaPlusValue && checker == iinaPlusValue.slice(-25)) {
+        optsParsed = true;
+        removeOpts();
+    } else if (iinaPlusValue && iinaPlusValue.length > iinaPlusArgsKey.length) {
+        // IINA 1.4.4+: full hex is in the URL query, skip suffix check
         optsParsed = true;
         removeOpts();
     } else {
-        print("check failed: " + checker);
+        print("check failed: checker='" + checker + "' slice='" + (iinaPlusValue ? iinaPlusValue.slice(-25) : "N/A") + "'");
         return;
     }
-
-    print('iinaPlusValue' + iinaPlusValue);
 
     if (iinaPlusValue) {
 
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
-        print('iina plus opts: ' + JSON.stringify(opts));
+        print('iina plus opts: ' + JSON.stringify(opts).slice(0, 200));
 
         let mpvVer = iina.core.getVersion().mpv;
         let number = parseInt(mpvVer.match(/\.(\d+)\./)[1], 10);
@@ -309,6 +322,21 @@ iina.event.on("iina.pip.changed", (pip) => {
     console.log("PIP: " + pip);
 });
 
+
+// Use mpv on_load hook to intercept file loading.
+// IINA 1.4.4 no longer delivers "iina.file-started" events to plugins,
+// and URL-scheme mpv_script-opts are not passed through to mpv.
+// The full iinaPlusArgs hex is embedded in the video.mp4 URL query string.
+mpv.addHook("on_load", 0, function(next) {
+    var path = mpv.getString('path') || '';
+
+    if (!optsParsed && path.includes('video.mp4?')) {
+        stopped = false;
+        parseOpts();
+        initMenuItems();
+    }
+    next();
+});
 
 iina.event.on("iina.file-started", () => {
     print('============================iina.file-started============================');
