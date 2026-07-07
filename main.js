@@ -16,6 +16,7 @@ var danmakuWebInited = false;
 var stopped = true;
 
 var mpvNewLoadfileAPI = false;
+var mpvReloading = false;
 
 function print(str) {
     console.log('[' + instanceID + '] ' + str);
@@ -56,14 +57,7 @@ function stringToHex(str) {
 };
 
 function hexToString(hex) {
-    try {
-        return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
-    } catch (e) {
-        return hex.match(/.{1,2}/g).map(function(byte) {
-            var code = parseInt(byte, 16);
-            return code < 0x80 ? String.fromCharCode(code) : '';
-        }).join('');
-    }
+    return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
 };
 
 function removeOpts() {
@@ -85,8 +79,8 @@ function parseOpts() {
     if (referrerHex) {
         iinaPlusValue = iinaPlusArgsKey + referrerHex;
     } else {
-        let scriptOpts = mpv.getString('script-opts').split(',');
-        iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
+        let scriptOpts = mpv.getString('script-opts');
+        iinaPlusValue = scriptOpts?.split(',').find(s => s.startsWith(iinaPlusArgsKey));
     }
 
     if (!iinaPlusValue) {
@@ -100,7 +94,6 @@ function parseOpts() {
     print('iinaPlusValue' + iinaPlusValue);
 
     if (iinaPlusValue) {
-
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
 
@@ -126,6 +119,7 @@ function parseOpts() {
 };
 
 function mpvLoadfile(url, opts) {
+    mpvReloading = true;
     if (mpvNewLoadfileAPI) {
         // v0.38.0 , svp 0.39.0
         mpv.command('loadfile', [url, 'replace', '0', opts]);
@@ -285,7 +279,6 @@ function initDanmakuWeb() {
     iinaPlusOpts.blockType = blockList.join(',');
 
 
-    print('initDM.');
     showOverlay(false);
     overlay.postMessage("initDM", iinaPlusOpts);
     danmakuWebInited = true;
@@ -301,6 +294,10 @@ iina.event.on("iina.plugin-overlay-loaded", () => {
 
 iina.event.on("mpv.end-file", () => {
     print('============================mpv.end-file============================');
+    if (mpvReloading) {
+        mpvReloading = false;
+        return;
+    }
     deinit();
 });
 
