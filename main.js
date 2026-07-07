@@ -132,6 +132,12 @@ function mpvLoadfile(url, opts) {
     } else {
         mpv.command('loadfile', [url, 'replace', opts]);
     };
+
+    // Fix mpv decoder issue
+    setTimeout(() => {
+        mpv.set('pause', true);
+        mpv.set('pause', false);
+    }, 2000)
 };
 
 function initMenuItems() {
