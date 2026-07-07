@@ -56,14 +56,7 @@ function stringToHex(str) {
 };
 
 function hexToString(hex) {
-    try {
-        return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
-    } catch (e) {
-        return hex.match(/.{1,2}/g).map(function(byte) {
-            var code = parseInt(byte, 16);
-            return code < 0x80 ? String.fromCharCode(code) : '';
-        }).join('');
-    }
+    return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
 };
 
 function removeOpts() {
