@@ -56,11 +56,19 @@ function stringToHex(str) {
 };
 
 function hexToString(hex) {
-    return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
+    try {
+        return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
+    } catch (e) {
+        return hex.match(/.{1,2}/g).map(function(byte) {
+            var code = parseInt(byte, 16);
+            return code < 0x80 ? String.fromCharCode(code) : '';
+        }).join('');
+    }
 };
 
 function removeOpts() {
-    print('remove parsed script-opts');
+    print('remove parsed opts');
+    mpv.set('referrer', '');
     mpv.set('script-opts', '');
 };
 
@@ -71,18 +79,23 @@ function parseOpts() {
         return;
     }
 
-    let scriptOpts = mpv.getString('script-opts').split(',');
-    let iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
-    
-    let checker = mpv.getString('path')?.split('?')[1] || '';
+    let iinaPlusValue;
 
-    if (checker && checker == iinaPlusValue.slice(-25)) {
-        optsParsed = true;
-        removeOpts();
+    let referrerHex = mpv.getString('referrer');
+    if (referrerHex) {
+        iinaPlusValue = iinaPlusArgsKey + referrerHex;
     } else {
-        print("check failed: " + checker);
+        let scriptOpts = mpv.getString('script-opts').split(',');
+        iinaPlusValue = scriptOpts.find(s => s.startsWith(iinaPlusArgsKey));
+    }
+
+    if (!iinaPlusValue) {
+        print("parseOpts: no iinaPlusArgs found");
         return;
     }
+
+    optsParsed = true;
+    removeOpts();
 
     print('iinaPlusValue' + iinaPlusValue);
 
@@ -119,6 +132,12 @@ function mpvLoadfile(url, opts) {
     } else {
         mpv.command('loadfile', [url, 'replace', opts]);
     };
+
+    // Fix mpv decoder issue
+    setTimeout(() => {
+        mpv.set('pause', true);
+        mpv.set('pause', false);
+    }, 2000)
 };
 
 function initMenuItems() {
@@ -280,13 +299,8 @@ iina.event.on("iina.plugin-overlay-loaded", () => {
     initDanmakuWeb();
 });
 
-iina.event.on("iina.window-will-close", () => {
-    print('iina.window-will-close');
-    deinit();
-});
-
-iina.event.on("iina.window-did-close", () => {
-    print('iina.window-did-close');
+iina.event.on("mpv.end-file", () => {
+    print('============================mpv.end-file============================');
     deinit();
 });
 
@@ -310,8 +324,8 @@ iina.event.on("iina.pip.changed", (pip) => {
 });
 
 
-iina.event.on("iina.file-started", () => {
-    print('============================iina.file-started============================');
+iina.event.on("mpv.start-file", () => {
+    print('============================mpv.start-file============================');
     stopped = false;
     parseOpts();
     initMenuItems();
