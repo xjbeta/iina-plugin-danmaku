@@ -127,11 +127,7 @@ function mpvLoadfile(url, opts) {
         mpv.command('loadfile', [url, 'replace', opts]);
     };
 
-    // Fix mpv decoder issue
-    setTimeout(() => {
-        mpv.set('pause', true);
-        mpv.set('pause', false);
-    }, 2000)
+    fdStart();
 };
 
 function initMenuItems() {
@@ -307,6 +303,7 @@ function deinit() {
         return;
     };
     stopped = true;
+    fdStop();
     setObserver(false);
     iinaPlusOpts = undefined;
     removeOpts();
@@ -376,3 +373,83 @@ function initObserverValues() {
     overlay.postMessage("timeChanged", {'time': t});
     overlay.postMessage("resizeWindow", {});
 };
+
+// ---------------------------------------------------------------------------
+// Frame Drop Monitor（治标兜底）
+// IINA 活跃播放约 6s 会杀掉 CVDisplayLink 致 mpv 持续掉帧；监听 frame-drop-count，
+// 累计超 250 即 pause+resume 重启链路，上限 3 次，2 分钟无触发看门狗自停。
+// 启动 fdStart(mpvLoadfile) / 停止 fdStop(end-file) / 换集 running&&mpvReloading 先重启。
+// 治本（不改代码）：defaults write com.colliderli.iina enableDisplayIdle -bool false
+// ---------------------------------------------------------------------------
+var fdStart, fdStop;
+(function () {
+    var running = false;
+    var watchdog = null;
+    var watchdogMs = 120000;
+    var base = 0;
+    var triggers = 0;
+    var dropListenerID = null;
+    var restartListenerID = null;
+    var armed = false;
+
+    function read() {
+        try { return mpv.getNumber('frame-drop-count'); } catch (e) { return null; }
+    }
+
+    function onDrop(count) {
+        if (triggers < 3 && (count - base) > 250) {
+            triggers++;
+            base = count;
+            mpv.set('pause', true);
+            mpv.set('pause', false);
+            print('[FrameDrop] cum=' + count + ' exceeded 250, triggered pause+resume (' + triggers + '/3).');
+            resetWatchdog();
+        }
+    }
+
+    function begin() {
+        if (running) return;
+        let d = read();
+        if (d === null) return;
+        running = true;
+        base = d;
+        triggers = 0;
+        dropListenerID = iina.event.on("mpv.frame-drop-count.changed", onDrop);
+        resetWatchdog();
+        print('FrameDrop monitor started (>250 drops -> pause+resume, max 3, auto-stop ' + (watchdogMs / 1000) + 's)');
+    }
+
+    function arm() {
+        if (armed) return;
+        armed = true;
+        restartListenerID = iina.event.on("mpv.playback-restart", () => { if (!mpvPaused) begin(); });
+    }
+
+    fdStart = function () {
+        if (running && mpvReloading) {
+            fdStop();
+        }
+        if (running) return;
+        if (mpvPaused) { arm(); return; }
+        let playing = false;
+        try { playing = mpv.getNumber('time-pos') > 0; } catch (e) {}
+        playing ? begin() : arm();
+    };
+
+    function resetWatchdog() {
+        if (watchdog) clearTimeout(watchdog);
+        watchdog = setTimeout(() => {
+            print('[FrameDrop] no trigger within ' + (watchdogMs / 1000) + 's, stopping monitor.');
+            fdStop();
+        }, watchdogMs);
+    }
+
+    fdStop = function () {
+        running = false;
+        if (dropListenerID) { iina.event.off("mpv.frame-drop-count.changed", dropListenerID); dropListenerID = null; }
+        if (restartListenerID) { iina.event.off("mpv.playback-restart", restartListenerID); restartListenerID = null; }
+        if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+        armed = false;
+        print('FrameDrop monitor stopped.');
+    };
+})();
