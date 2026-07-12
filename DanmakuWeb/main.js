@@ -1,28 +1,34 @@
+// Danmaku overlay (WKWebView) — bridges the IINA plugin and CommentCoreLibrary.
+
 const _ = import('../node_modules/comment-core-library');
+
+// ---- Globals & Helpers ----
 
 $ = function(a) {
     return document.getElementById(a);
 };
-var defWidth = 680;
-var rawUrl;
-var dmType;
 
-var cmTime = 0;
+var baseWidth = 680;
+var liveUrl;
+var srcType;
+var lastTime = 0;
 
 function hexToString(hex) {
     return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
 };
 
+// ---- iina Message Handlers ----
+
 iina.onMessage("initDM", (opts) => {
-    dmType = opts.type;
-    defWidth = opts.dmSpeed;
+    srcType = opts.type;
+    baseWidth = opts.dmSpeed;
 
     window.bind();
     window.initDM();
 
-    switch(dmType) {
+    switch(srcType) {
         case 0:
-            rawUrl = opts.rawUrl;
+            liveUrl = opts.rawUrl;
             initWebsocket(opts.port);
             break;
         case 1:
@@ -50,6 +56,7 @@ iina.onMessage("initDM", (opts) => {
 iina.onMessage("resizeWindow", () => {
     window.cmResize();
 });
+
 iina.onMessage("sendDM", (t) => {
     var comment = {
         'text': t.text,
@@ -62,31 +69,35 @@ iina.onMessage("sendDM", (t) => {
 });
 
 iina.onMessage("timeChanged", (t) => {
-    if (Math.abs(cmTime - t.time) > 5.5) {
+    if (Math.abs(lastTime - t.time) > 5.5) {
         window.cm.clear();
     };
-    cmTime = t.time;
+    lastTime = t.time;
     window.cm.time(Math.floor(t.time * 1000));
 });
+
 iina.onMessage("pauseChanged", (t) => {
     t.isPaused ? window.cm.stop() : window.cm.start();
 });
+
 iina.onMessage("close", () => {
     cm.clear();
     cm.stop();
     window._provider.destroy();
     ws.onclose = function(){};
     ws.close();
-    rawUrl = undefined;
-    dmType = undefined;
+    liveUrl = undefined;
+    srcType = undefined;
     updateStatus('');
 });
+
+// ---- CommentManager Setup ----
 
 function bind() {
     window.cm = new CommentManager($('commentCanvas'));
     cm.init();
     window.cmResize = function () {
-        var scale = $("player").offsetWidth / defWidth;
+        var scale = $("player").offsetWidth / baseWidth;
         window.cm.options.scroll.scale = scale;
         cm.setBounds();
     };
@@ -127,7 +138,7 @@ function bind() {
         document.getElementsByTagName('head')[0].appendChild(style);
         window.cm.options.global.className = 'customFont'
     };
-    
+
     /** Load **/
     window.loadDM = function(dmf, provider) {
         if (window._provider && window._provider instanceof CommentProvider) {
@@ -200,6 +211,7 @@ function bind() {
     };
 };
 
+// ---- Status Indicator ----
 
 function updateStatus(status){
     switch(status) {
@@ -215,13 +227,10 @@ function updateStatus(status){
     }
 }
 
-function blockDmType(t) {
-    // if (t.includes('List')) {
-    //     window.loadFilter('/danmaku/iina-plus-blockList.xml');
-    // }
+// ---- Type Blocking ----
 
-    // CCL mode mapping (CommentManager.showComment):
-    //   1/2/6 = scroll (2 & 6 are reverse-direction), 5 = top, 4 = bottom, 7/8 = advanced
+function blockDmType(t) {
+    // CCL mode: 1/2/6 scroll, 5 top, 4 bottom, 7/8 advanced
     cm.filter.allowTypes[1] = !t.includes('Scroll');
     cm.filter.allowTypes[2] = !t.includes('Scroll');
     cm.filter.allowTypes[6] = !t.includes('Scroll');
@@ -230,6 +239,7 @@ function blockDmType(t) {
     cm.filter.allowTypes[7] = !t.includes('Advanced');
     cm.filter.allowTypes[8] = !t.includes('Advanced');
 
+    // block color -> keep only white
     let colorRule = {
         subject: 'color',
         op: '=',
@@ -244,26 +254,28 @@ function blockDmType(t) {
     };
 };
 
+// ---- WebSocket (live danmaku) ----
+
 function start(websocketServerLocation){
     ws = new WebSocket(websocketServerLocation);
     updateStatus('warning');
-    ws.onopen = function(evt) { 
+    ws.onopen = function(evt) {
         updateStatus();
-        ws.send('iinaDM://' + 'v=1&' + rawUrl);
+        ws.send('iinaDM://' + 'v=1&' + liveUrl);
     };
-    ws.onmessage = function(evt) { 
+    ws.onmessage = function(evt) {
         var event = JSON.parse(evt.data);
-        
+
         if (event.method != 'sendDM') {
             console.log(event.method, event.text);
         }
-        
+
         switch(event.method) {
         case 'sendDM':
             if (document.visibilityState != 'visible') {
                 return;
             }
-                
+
             event.dms.forEach(function(element, index) {
                 setTimeout(function () {
                     var comment = {
@@ -284,9 +296,9 @@ function start(websocketServerLocation){
 
     };
     ws.onclose = function(){
-        if (dmType == 0) {
+        if (srcType == 0) {
             updateStatus('warning');
-            // Try to reconnect in 1 seconds
+            // Reconnect after 1.5s
             setTimeout(function(){start(websocketServerLocation)}, 1500);
         }
     };
