@@ -72,8 +72,8 @@ iina.onMessage("pauseChanged", (t) => {
     t.isPaused ? window.cm.stop() : window.cm.start();
 });
 iina.onMessage("close", () => {
-    cm.clear;
-    cm.stop;
+    cm.clear();
+    cm.stop();
     window._provider.destroy();
     ws.onclose = function(){};
     ws.close();
@@ -219,11 +219,16 @@ function blockDmType(t) {
     // if (t.includes('List')) {
     //     window.loadFilter('/danmaku/iina-plus-blockList.xml');
     // }
-   
-    cm.filter.allowTypes[5] = !t.includes('Top');
-    cm.filter.allowTypes[4] = !t.includes('Bottom');
+
+    // CCL mode mapping (CommentManager.showComment):
+    //   1/2/6 = scroll (2 & 6 are reverse-direction), 5 = top, 4 = bottom, 7/8 = advanced
     cm.filter.allowTypes[1] = !t.includes('Scroll');
     cm.filter.allowTypes[2] = !t.includes('Scroll');
+    cm.filter.allowTypes[6] = !t.includes('Scroll');
+    cm.filter.allowTypes[5] = !t.includes('Top');
+    cm.filter.allowTypes[4] = !t.includes('Bottom');
+    cm.filter.allowTypes[7] = !t.includes('Advanced');
+    cm.filter.allowTypes[8] = !t.includes('Advanced');
 
     let colorRule = {
         subject: 'color',
@@ -237,9 +242,6 @@ function blockDmType(t) {
     } else {
         cm.filter.removeRule(colorRule);
     };
-
-    cm.filter.allowTypes[7] = !t.includes('Advanced');
-    cm.filter.allowTypes[8] = !t.includes('Advanced');
 };
 
 function start(websocketServerLocation){
