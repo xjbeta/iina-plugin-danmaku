@@ -1,3 +1,6 @@
+// ---------------------------------------------------------------------------
+// Module Setup — references, plugin dependencies & state
+// ---------------------------------------------------------------------------
 /// <reference path="node_modules/iina-plugin-definition/iina/index.d.ts" />
 
 const { core, console, event, mpv, http, menu, overlay, preferences, utils, file } = iina;
@@ -18,10 +21,33 @@ var stopped = true;
 var mpvNewLoadfileAPI = false;
 var mpvReloading = false;
 
+// ---------------------------------------------------------------------------
+// Utility — logging & hex encode/decode (iina-plus protocol compatible)
+// ---------------------------------------------------------------------------
 function print(str) {
     console.log('[' + instanceID + '] ' + str);
 };
 
+function stringToHex(str) {
+    return Array.from(str).map(c =>
+        c.charCodeAt(0) < 128 ? c.charCodeAt(0).toString(16).padStart(2, '0') :
+        encodeURIComponent(c).replace(/\%/g,'').toLowerCase()
+      ).join('');
+};
+
+function hexToString(hex) {
+    return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
+};
+
+function removeOpts() {
+    print('remove parsed opts');
+    mpv.set('referrer', '');
+    mpv.set('script-opts', '');
+};
+
+// ---------------------------------------------------------------------------
+// Overlay & Danmaku Layer — show/hide, load/unload, XML file
+// ---------------------------------------------------------------------------
 function showOverlay(osc=true) {
     print('showOverlay');
     overlay.show();
@@ -42,6 +68,22 @@ function hideOverlay(osc=true) {
     setObserver(false);
 };
 
+function loadDanmaku() {
+    if (!danmakuWebLoaded) {
+        print('loadDanmaku');
+        overlay.loadFile("DanmakuWeb/index.htm");
+        danmakuWebLoaded = true;
+    };
+};
+
+function unloadDanmaku() {
+    if (danmakuWebLoaded) {
+        print('unloadDanmaku');
+        overlay.simpleMode();
+        danmakuWebLoaded = false;
+    };
+};
+
 function loadXMLFile(path) {
     print('loadXMLFile.' + 'path: ' + path);
     loadDanmaku();
@@ -49,23 +91,9 @@ function loadXMLFile(path) {
     return stringToHex(content);
 };
 
-function stringToHex(str) {
-    return Array.from(str).map(c => 
-        c.charCodeAt(0) < 128 ? c.charCodeAt(0).toString(16).padStart(2, '0') :
-        encodeURIComponent(c).replace(/\%/g,'').toLowerCase()
-      ).join('');
-};
-
-function hexToString(hex) {
-    return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
-};
-
-function removeOpts() {
-    print('remove parsed opts');
-    mpv.set('referrer', '');
-    mpv.set('script-opts', '');
-};
-
+// ---------------------------------------------------------------------------
+// Parse & Load — decode iinaPlus args, dispatch mpv loadfile
+// ---------------------------------------------------------------------------
 function parseOpts() {
 
     if (optsParsed) {
@@ -98,10 +126,11 @@ function parseOpts() {
         print('iina plus opts: ' + JSON.stringify(opts));
 
         let mpvVer = iina.core.getVersion().mpv;
-        let number = parseInt(mpvVer.match(/\.(\d+)\./)[1], 10);
+        let m = mpvVer.match(/\.(\d+)\./);
+        let number = m ? parseInt(m[1], 10) : undefined;
         print('mpv version: ' + mpvVer);
         print('mpv number: ' + number);
-        mpvNewLoadfileAPI = number >= 38;
+        mpvNewLoadfileAPI = m ? number >= 38 : true;
 
         mpvLoadfile(opts.urls[opts.currentLine], opts.mpvScript);
 
@@ -130,6 +159,58 @@ function mpvLoadfile(url, opts) {
     fdStart();
 };
 
+// ---------------------------------------------------------------------------
+// Danmaku Web — init webview with options & preferences
+// ---------------------------------------------------------------------------
+function initDanmakuWeb() {
+    if (iinaPlusOpts === undefined) {
+        return;
+    };
+
+    switch (iinaPlusOpts.type) {
+        case 0:
+            break;
+        case 1:
+            iinaPlusOpts.xmlContent = loadXMLFile(iinaPlusOpts.xmlPath);
+            break;
+        default:
+            return;
+    };
+
+    iinaPlusOpts.dmOpacity = iina.preferences.get('dmOpacity');
+    iinaPlusOpts.dmSpeed = iina.preferences.get('dmSpeed');
+    iinaPlusOpts.dmFont = iina.preferences.get('dmFont');
+
+    var blockList = [];
+    if (iina.preferences.get('blockTypeScroll') == 1) {
+        blockList.push('Scroll');
+    };
+    if (iina.preferences.get('blockTypeTop') == 1) {
+        blockList.push('Top');
+    };
+    if (iina.preferences.get('blockTypeBottom') == 1) {
+        blockList.push('Bottom');
+    };
+    if (iina.preferences.get('blockTypeColor') == 1) {
+        blockList.push('Color');
+    };
+    if (iina.preferences.get('blockTypeAdvanced') == 1) {
+        blockList.push('Advanced');
+    };
+    iinaPlusOpts.blockType = blockList.join(',');
+
+
+    showOverlay(false);
+    overlay.postMessage("initDM", iinaPlusOpts);
+    danmakuWebInited = true;
+    print('initDM....');
+
+    setObserver(true);
+};
+
+// ---------------------------------------------------------------------------
+// Menu — danmaku file, show/hide, quality & line switching
+// ---------------------------------------------------------------------------
 function initMenuItems() {
     menu.removeAllItems();
     const danmakuMenuItem = menu.item("Danmaku");
@@ -187,6 +268,9 @@ function initMenuItems() {
     menu.addItem(lineItem);
 };
 
+// ---------------------------------------------------------------------------
+// Request — fetch new URL on quality/line change from iina-plus server
+// ---------------------------------------------------------------------------
 function requestNewUrl(quality, line) {
     print(quality + line);
 
@@ -221,117 +305,9 @@ function requestNewUrl(quality, line) {
     })
 };
 
-function loadDanmaku() {
-    if (!danmakuWebLoaded) {
-        print('loadDanmaku');
-        overlay.loadFile("DanmakuWeb/index.htm");
-        danmakuWebLoaded = true;
-    };
-};
-
-function unloadDanmaku() {
-    if (danmakuWebLoaded) {
-        print('unloadDanmaku');
-        overlay.simpleMode();
-        danmakuWebLoaded = false;
-    };
-};
-
-function initDanmakuWeb() {
-    if (iinaPlusOpts === undefined) {
-        return;
-    };
-    
-    switch (iinaPlusOpts.type) {
-        case 0:
-            break;
-        case 1:
-            iinaPlusOpts.xmlContent = loadXMLFile(iinaPlusOpts.xmlPath);
-            break;
-        default:
-            return;
-    };
-
-    iinaPlusOpts.dmOpacity = iina.preferences.get('dmOpacity');
-    iinaPlusOpts.dmSpeed = iina.preferences.get('dmSpeed');
-    iinaPlusOpts.dmFont = iina.preferences.get('dmFont');
-
-    var blockList = [];
-    if (iina.preferences.get('blockTypeScroll') == 1) {
-        blockList.push('Scroll');
-    };
-    if (iina.preferences.get('blockTypeTop') == 1) {
-        blockList.push('Top');
-    };
-    if (iina.preferences.get('blockTypeBottom') == 1) {
-        blockList.push('Bottom');
-    };
-    if (iina.preferences.get('blockTypeColor') == 1) {
-        blockList.push('Color');
-    };
-    if (iina.preferences.get('blockTypeAdvanced') == 1) {
-        blockList.push('Advanced');
-    };
-    iinaPlusOpts.blockType = blockList.join(',');
-
-
-    showOverlay(false);
-    overlay.postMessage("initDM", iinaPlusOpts);
-    danmakuWebInited = true;
-    print('initDM....');
-
-    setObserver(true);
-};
-
-iina.event.on("iina.plugin-overlay-loaded", () => {
-    print('iina.plugin-overlay-loaded');
-    initDanmakuWeb();
-});
-
-iina.event.on("mpv.end-file", () => {
-    print('============================mpv.end-file============================');
-    if (mpvReloading) {
-        mpvReloading = false;
-        return;
-    }
-    deinit();
-});
-
-function deinit() {
-    optsParsed = false;
-    if (stopped) {
-        return;
-    };
-    stopped = true;
-    fdStop();
-    setObserver(false);
-    iinaPlusOpts = undefined;
-    removeOpts();
-    unloadDanmaku();
-    overlayShowing = false;
-    mpvPaused = false;
-    danmakuWebInited = false;
-};
-
-iina.event.on("iina.pip.changed", (pip) => {
-    console.log("PIP: " + pip);
-});
-
-
-iina.event.on("mpv.start-file", () => {
-    print('============================mpv.start-file============================');
-    stopped = false;
-    parseOpts();
-    initMenuItems();
-});
-
-iina.event.on("mpv.pause.changed", (isPaused) => {
-    overlay.postMessage("pauseChanged", {'isPaused': isPaused});
-    mpvPaused = isPaused;
-    setObserver(!isPaused);
-});
-
-
+// ---------------------------------------------------------------------------
+// Observers — mpv time-pos / window-scale listeners for overlay sync
+// ---------------------------------------------------------------------------
 var windowScaleListenerID, timePosListenerID;
 
 function setObserver(start) {
@@ -375,11 +351,61 @@ function initObserverValues() {
 };
 
 // ---------------------------------------------------------------------------
-// Frame Drop Monitor（治标兜底）
-// IINA 活跃播放约 6s 会杀掉 CVDisplayLink 致 mpv 持续掉帧；监听 frame-drop-count，
-// 累计超 250 即 pause+resume 重启链路，上限 3 次，2 分钟无触发看门狗自停。
-// 启动 fdStart(mpvLoadfile) / 停止 fdStop(end-file) / 换集 running&&mpvReloading 先重启。
-// 治本（不改代码）：defaults write com.colliderli.iina enableDisplayIdle -bool false
+// Lifecycle — teardown on end-file / stop
+// ---------------------------------------------------------------------------
+function deinit() {
+    optsParsed = false;
+    if (stopped) {
+        return;
+    };
+    stopped = true;
+    fdStop();
+    setObserver(false);
+    iinaPlusOpts = undefined;
+    removeOpts();
+    unloadDanmaku();
+    overlayShowing = false;
+    mpvPaused = false;
+    danmakuWebInited = false;
+};
+
+// ---------------------------------------------------------------------------
+// Event Registration — IINA / mpv lifecycle & state hooks
+// ---------------------------------------------------------------------------
+iina.event.on("iina.plugin-overlay-loaded", () => {
+    print('iina.plugin-overlay-loaded');
+    initDanmakuWeb();
+});
+
+iina.event.on("mpv.start-file", () => {
+    print('============================mpv.start-file============================');
+    stopped = false;
+    parseOpts();
+    initMenuItems();
+});
+
+iina.event.on("mpv.end-file", () => {
+    print('============================mpv.end-file============================');
+    if (mpvReloading) {
+        mpvReloading = false;
+        return;
+    }
+    deinit();
+});
+
+iina.event.on("mpv.pause.changed", (isPaused) => {
+    overlay.postMessage("pauseChanged", {'isPaused': isPaused});
+    mpvPaused = isPaused;
+    setObserver(!isPaused);
+});
+
+iina.event.on("iina.pip.changed", (pip) => {
+    console.log("PIP: " + pip);
+});
+
+// ---------------------------------------------------------------------------
+// Frame Drop Monitor — pause+resume on sustained frame drops
+// Frame-Drop-Monitor-root-cause-zh-en.md
 // ---------------------------------------------------------------------------
 var fdStart, fdStop;
 (function () {
