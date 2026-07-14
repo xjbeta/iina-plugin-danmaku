@@ -410,25 +410,46 @@ iina.event.on("iina.pip.changed", (pip) => {
 var fdStart, fdStop;
 (function () {
     var running = false;
+    var armed = false;
+    var dropListenerID = null;
+    var restartListenerID = null;
     var watchdog = null;
     var watchdogMs = 120000;
     var base = 0;
     var triggers = 0;
-    var dropListenerID = null;
-    var restartListenerID = null;
-    var armed = false;
+    var maxTriggers = 5;
+    var cooldownMs = 5000;
+    var lastTriggerAt = 0;
+    var dropBaseFps = 60;
+    var dropBaseCount = 60;
+    var dropThreshold = null;
 
     function read() {
         try { return mpv.getNumber('frame-drop-count'); } catch (e) { return null; }
     }
 
+    // threshold scales with fps
+    function fpsThreshold() {
+        if (dropThreshold !== null) return dropThreshold;
+        let fps = 0;
+        try { fps = mpv.getNumber('container-fps'); } catch (e) {}
+        if (!fps || fps < 1) { try { fps = mpv.getNumber('estimated-vf-fps'); } catch (e2) {} }
+        if (!fps || fps < 1) fps = dropBaseFps;
+        dropThreshold = Math.max(30, Math.round(fps * dropBaseCount / dropBaseFps));
+        return dropThreshold;
+    }
+
     function onDrop(count) {
-        if (triggers < 3 && (count - base) > 250) {
+        if (triggers >= maxTriggers) return;
+        if (Date.now() - lastTriggerAt < cooldownMs) return;
+        let thr = fpsThreshold();
+        if ((count - base) > thr) {
             triggers++;
             base = count;
+            lastTriggerAt = Date.now();
             mpv.set('pause', true);
             mpv.set('pause', false);
-            print('[FrameDrop] cum=' + count + ' exceeded 250, triggered pause+resume (' + triggers + '/3).');
+            print('[FrameDrop] cum=' + count + ' exceeded ' + thr + ', pause+resume (' + triggers + '/' + maxTriggers + ').');
             resetWatchdog();
         }
     }
@@ -440,9 +461,10 @@ var fdStart, fdStop;
         running = true;
         base = d;
         triggers = 0;
+        lastTriggerAt = 0;
         dropListenerID = iina.event.on("mpv.frame-drop-count.changed", onDrop);
         resetWatchdog();
-        print('FrameDrop monitor started (>250 drops -> pause+resume, max 3, auto-stop ' + (watchdogMs / 1000) + 's)');
+        print('FrameDrop monitor started (max ' + maxTriggers + ', auto-stop ' + (watchdogMs / 1000) + 's)');
     }
 
     function arm() {
@@ -465,7 +487,7 @@ var fdStart, fdStop;
     function resetWatchdog() {
         if (watchdog) clearTimeout(watchdog);
         watchdog = setTimeout(() => {
-            print('[FrameDrop] no trigger within ' + (watchdogMs / 1000) + 's, stopping monitor.');
+            print('[FrameDrop] no trigger in ' + (watchdogMs / 1000) + 's, stopping.');
             fdStop();
         }, watchdogMs);
     }
@@ -476,6 +498,7 @@ var fdStart, fdStop;
         if (restartListenerID) { iina.event.off("mpv.playback-restart", restartListenerID); restartListenerID = null; }
         if (watchdog) { clearTimeout(watchdog); watchdog = null; }
         armed = false;
+        dropThreshold = null; // recompute for the next video's fps
         print('FrameDrop monitor stopped.');
     };
 })();
