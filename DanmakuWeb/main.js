@@ -102,18 +102,6 @@ function bind() {
         cm.setBounds();
     };
 
-    document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState == 'visible') {
-            console.log('visible');
-            cm.start();
-            cm.clear();
-        } else {
-            console.log('hidden');
-            cm.stop();
-            cm.clear();
-        };
-    });
-
     window.initDM = function() {
         if (window._provider && window._provider instanceof CommentProvider) {
             window._provider.destroy();
@@ -272,10 +260,6 @@ function start(websocketServerLocation){
 
         switch(event.method) {
         case 'sendDM':
-            if (document.visibilityState != 'visible') {
-                return;
-            }
-
             event.dms.forEach(function(element, index) {
                 setTimeout(function () {
                     var comment = {
