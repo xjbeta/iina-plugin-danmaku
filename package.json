@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "comment-core-library": "github:xjbeta/CommentCoreLibrary#iina-grunt",
+    "comment-core-library": "https://github.com/xjbeta/CommentCoreLibrary/releases/download/latest/comment-core-library-latest.tgz",
     "iina-plugin-definition": "^0.99.3"
   }
 }
