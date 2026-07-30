@@ -56,6 +56,7 @@ function showOverlay(osc=true) {
     };
     overlayShowing = true;
     setObserver(true);
+    startWindowMainListener();
 };
 
 function hideOverlay(osc=true) {
@@ -66,6 +67,7 @@ function hideOverlay(osc=true) {
     };
     overlayShowing = false;
     setObserver(false);
+    stopWindowMainListener();
 };
 
 function loadDanmaku() {
@@ -125,14 +127,17 @@ function parseOpts() {
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
 
-        let mpvVer = iina.core.getVersion().mpv;
-        let m = mpvVer.match(/\.(\d+)\./);
-        let number = m ? parseInt(m[1], 10) : undefined;
-        print('mpv version: ' + mpvVer);
-        print('mpv number: ' + number);
-        mpvNewLoadfileAPI = m ? number >= 38 : true;
+        // Old entry: iina-plus protocol — opts carries video URLs, reload via mpv.
+        if (opts.urls) {
+            let mpvVer = iina.core.getVersion().mpv;
+            let m = mpvVer.match(/\.(\d+)\./);
+            let number = m ? parseInt(m[1], 10) : undefined;
+            print('mpv version: ' + mpvVer);
+            print('mpv number: ' + number);
+            mpvNewLoadfileAPI = m ? number >= 38 : true;
 
-        mpvLoadfile(opts.urls[opts.currentLine], opts.mpvScript);
+            mpvLoadfile(opts.urls[opts.currentLine], opts.mpvScript);
+        }
 
         iinaPlusOpts = opts;
         iinaPlusOpts.mpvScript = undefined;
@@ -204,6 +209,10 @@ function initDanmakuWeb() {
     overlay.postMessage("initDM", iinaPlusOpts);
     danmakuWebInited = true;
     print('initDM....');
+
+    // Re-sync visibility — first setHidden from startWindowMainListener
+    // arrived before initDM (before cm existed) and was dropped by the guard.
+    overlay.postMessage("setHidden", { 'hidden': !core.window.visible });
 
     setObserver(true);
 };
@@ -310,6 +319,30 @@ function requestNewUrl(quality, line) {
 // ---------------------------------------------------------------------------
 var windowScaleListenerID, timePosListenerID;
 
+// Window visibility: both triggers read core.window.visible (occlusionState)
+// and use it as the single source of truth.
+var windowMainListenerID;
+
+function startWindowMainListener() {
+    stopWindowMainListener();
+    windowMainListenerID = event.on("iina.window-main.changed", () => {
+        let visible = core.window.visible;
+        print('Window main changed, visible=' + visible);
+        overlay.postMessage("setHidden", { 'hidden': !visible });
+    });
+    // Sync initial state — catches the case where the plugin starts while
+    // the window is already hidden (no event will fire in that scenario).
+    let visible = core.window.visible;
+    overlay.postMessage("setHidden", { 'hidden': !visible });
+};
+
+function stopWindowMainListener() {
+    if (windowMainListenerID) {
+        event.off("iina.window-main.changed", windowMainListenerID);
+        windowMainListenerID = undefined;
+    };
+};
+
 function setObserver(start) {
     let timePosKey = "mpv.time-pos.changed";
     let windowScaleKey = "mpv.window-scale.changed";
@@ -361,6 +394,7 @@ function deinit() {
     stopped = true;
     fdStop();
     setObserver(false);
+    stopWindowMainListener();
     iinaPlusOpts = undefined;
     removeOpts();
     unloadDanmaku();
@@ -375,6 +409,13 @@ function deinit() {
 iina.event.on("iina.plugin-overlay-loaded", () => {
     print('iina.plugin-overlay-loaded');
     initDanmakuWeb();
+});
+
+// WKWebView visibilitychange → reads core.window.visible
+overlay.onMessage("checkVisibility", () => {
+    let visible = core.window.visible;
+    print('checkVisibility: visible=' + visible);
+    overlay.postMessage("setHidden", { 'hidden': !visible });
 });
 
 iina.event.on("mpv.start-file", () => {
