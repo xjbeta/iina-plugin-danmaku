@@ -1,0 +1,44 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create plugin archive
+        run: |
+          echo "Tag: ${GITHUB_REF#refs/tags/}"
+
+          # Remove macOS metadata files that Finder would normally hide
+          find . -name '.DS_Store' -type f -delete
+          rm -f node_modules/.package-lock.json
+
+          # Pack all non-hidden files → IINA plugin archive (.iinaplgz)
+          # (mirrors: Finder → Cmd+A → right-click → compress → rename to .iinaplgz)
+          zip -r iina-plugin-danmaku.iinaplgz . \
+            -x './.*' '*/.*'
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: iina-plugin-danmaku.iinaplgz
+          generate_release_notes: true
