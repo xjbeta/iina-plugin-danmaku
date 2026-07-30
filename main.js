@@ -127,14 +127,17 @@ function parseOpts() {
         let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
         print('iina plus opts: ' + JSON.stringify(opts));
 
-        let mpvVer = iina.core.getVersion().mpv;
-        let m = mpvVer.match(/\.(\d+)\./);
-        let number = m ? parseInt(m[1], 10) : undefined;
-        print('mpv version: ' + mpvVer);
-        print('mpv number: ' + number);
-        mpvNewLoadfileAPI = m ? number >= 38 : true;
+        // Old entry: iina-plus protocol — opts carries video URLs, reload via mpv.
+        if (opts.urls) {
+            let mpvVer = iina.core.getVersion().mpv;
+            let m = mpvVer.match(/\.(\d+)\./);
+            let number = m ? parseInt(m[1], 10) : undefined;
+            print('mpv version: ' + mpvVer);
+            print('mpv number: ' + number);
+            mpvNewLoadfileAPI = m ? number >= 38 : true;
 
-        mpvLoadfile(opts.urls[opts.currentLine], opts.mpvScript);
+            mpvLoadfile(opts.urls[opts.currentLine], opts.mpvScript);
+        }
 
         iinaPlusOpts = opts;
         iinaPlusOpts.mpvScript = undefined;
@@ -206,6 +209,10 @@ function initDanmakuWeb() {
     overlay.postMessage("initDM", iinaPlusOpts);
     danmakuWebInited = true;
     print('initDM....');
+
+    // Re-sync visibility — first setHidden from startWindowMainListener
+    // arrived before initDM (before cm existed) and was dropped by the guard.
+    overlay.postMessage("setHidden", { 'hidden': !core.window.visible });
 
     setObserver(true);
 };
