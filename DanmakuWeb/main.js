@@ -80,9 +80,17 @@ iina.onMessage("pauseChanged", (t) => {
     t.isPaused ? window.cm.stop() : window.cm.start();
 });
 
+iina.onMessage("setHidden", (t) => {
+    if (typeof window.cm !== 'undefined' && window.cm.setHidden && window.cm.isHidden() !== t.hidden) {
+        window.cm.setHidden(t.hidden);
+        if (t.hidden) { window.cm.clear(); }
+        console.log('setHidden:', t.hidden);
+    }
+});
+
 iina.onMessage("close", () => {
-    cm.clear();
-    cm.stop();
+    window.cm.clear();
+    window.cm.stop();
     window._provider.destroy();
     ws.onclose = function(){};
     ws.close();
@@ -307,3 +315,14 @@ function initWebsocket(port){
     start('ws://127.0.0.1:' + port + '/danmaku-websocket');
     console.log('initWebsocket');
 }
+
+// Visibility — WKWebView's own signal (fast path for occlusion/changes).
+// IINA side's window-main.changed provides the cross-check via occlusionState.
+
+document.addEventListener("visibilitychange", () => {
+    if (typeof window.cm !== 'undefined' && window.cm.setHidden) {
+        let hidden = document.hidden;
+        window.cm.setHidden(hidden);
+        console.log('visibilitychange: hidden=' + hidden);
+    }
+});
