@@ -210,9 +210,11 @@ function initDanmakuWeb() {
     danmakuWebInited = true;
     print('initDM....');
 
-    // Re-sync visibility — first setHidden from startWindowMainListener
-    // arrived before initDM (before cm existed) and was dropped by the guard.
+    // Re-sync play/visibility state. The setHidden sent from
+    // startWindowMainListener arrived before initDM (before cm existed) and
+    // was dropped, and pauseChanged may not fire for a fresh file.
     overlay.postMessage("setHidden", { 'hidden': !core.window.visible });
+    overlay.postMessage("pauseChanged", { 'isPaused': mpvPaused });
 
     setObserver(true);
 };
@@ -319,27 +321,51 @@ function requestNewUrl(quality, line) {
 // ---------------------------------------------------------------------------
 var windowScaleListenerID, timePosListenerID;
 
-// Window visibility: both triggers read core.window.visible (occlusionState)
-// and use it as the single source of truth.
+// Window visibility — single source of truth is core.window.visible
+// (NSWindow.occlusionState). Two channels feed it to the webview:
+//
+//   1. iina.window-main.changed — instant, but only fires on main-window
+//      transitions (app activation, minimize/restore).
+//   2. A low-frequency poll — covers transitions that emit no event at all,
+//      notably switching to another desktop space. Without this the webview
+//      would stay stuck hidden after such a switch.
+//
+// The poll always reports the current state rather than only on change: the
+// webview OR-merges this with its own visibility API, which can latch to
+// hidden if its visibilitychange event fires in one direction only. A
+// repeated "visible" is what unlatches it. The webview dedupes on its side.
 var windowMainListenerID;
+var visibilityPollTimer;
+const VISIBILITY_POLL_MS = 500;
+
+function reportVisibility() {
+    overlay.postMessage("setHidden", { 'hidden': !core.window.visible });
+};
 
 function startWindowMainListener() {
     stopWindowMainListener();
-    windowMainListenerID = event.on("iina.window-main.changed", () => {
-        let visible = core.window.visible;
-        print('Window main changed, visible=' + visible);
-        overlay.postMessage("setHidden", { 'hidden': !visible });
-    });
+    windowMainListenerID = event.on("iina.window-main.changed", reportVisibility);
     // Sync initial state — catches the case where the plugin starts while
     // the window is already hidden (no event will fire in that scenario).
-    let visible = core.window.visible;
-    overlay.postMessage("setHidden", { 'hidden': !visible });
+    reportVisibility();
+    // Poll runs independently of pause/play — occlusion has nothing to do
+    // with playback state.
+    stopVisibilityPoll();
+    visibilityPollTimer = setInterval(reportVisibility, VISIBILITY_POLL_MS);
 };
 
 function stopWindowMainListener() {
     if (windowMainListenerID) {
         event.off("iina.window-main.changed", windowMainListenerID);
         windowMainListenerID = undefined;
+    };
+    stopVisibilityPoll();
+};
+
+function stopVisibilityPoll() {
+    if (visibilityPollTimer) {
+        clearInterval(visibilityPollTimer);
+        visibilityPollTimer = undefined;
     };
 };
 
