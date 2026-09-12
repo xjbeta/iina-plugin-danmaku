@@ -1,5 +1,6 @@
 // ---------------------------------------------------------------------------
 // Module Setup — references, plugin dependencies & state
+// Design doc: Ytdl-Option-Loading-and-IINA-Open-Flow-zh-en.md
 // ---------------------------------------------------------------------------
 /// <reference path="node_modules/iina-plugin-definition/iina/index.d.ts" />
 
@@ -11,6 +12,9 @@ let iinaPlusArgsKey = 'iinaPlusArgs=';
 var iinaPlusOpts;
 var optsParsed = false;
 
+// iinaPlusArgs parsed in on_load, handed to start-file for one-time consumption (doc §3)
+var hookArgsForMainThread;
+
 var danmakuWebLoaded = false;
 var overlayShowing = false;
 var mpvPaused = false;
@@ -18,7 +22,7 @@ var danmakuWebInited = false;
 
 var stopped = true;
 
-var mpvNewLoadfileAPI = false;
+// in-flight plugin reload; swallows the mpv.end-file that follows it
 var mpvReloading = false;
 
 // ---------------------------------------------------------------------------
@@ -49,7 +53,6 @@ function removeOpts() {
 // Overlay & Danmaku Layer — show/hide, load/unload, XML file
 // ---------------------------------------------------------------------------
 function showOverlay(osc=true) {
-    print('showOverlay');
     overlay.show();
     if (osc) {
         core.osd("Show Danmaku.");
@@ -60,7 +63,6 @@ function showOverlay(osc=true) {
 };
 
 function hideOverlay(osc=true) {
-    print('hideOverlay');
     overlay.hide();
     if (osc) {
         core.osd("Hide Danmaku.");
@@ -72,7 +74,6 @@ function hideOverlay(osc=true) {
 
 function loadDanmaku() {
     if (!danmakuWebLoaded) {
-        print('loadDanmaku');
         overlay.loadFile("DanmakuWeb/index.htm");
         danmakuWebLoaded = true;
     };
@@ -80,14 +81,13 @@ function loadDanmaku() {
 
 function unloadDanmaku() {
     if (danmakuWebLoaded) {
-        print('unloadDanmaku');
         overlay.simpleMode();
         danmakuWebLoaded = false;
     };
 };
 
 function loadXMLFile(path) {
-    print('loadXMLFile.' + 'path: ' + path);
+    print('loadXMLFile.path: ' + path);
     loadDanmaku();
     const content = iina.file.read(path);
     return stringToHex(content);
@@ -96,6 +96,93 @@ function loadXMLFile(path) {
 // ---------------------------------------------------------------------------
 // Parse & Load — decode iinaPlus args, dispatch mpv loadfile
 // ---------------------------------------------------------------------------
+// payload = stringToHex() output; channel may be dirtied, so validate before hexToString (doc §3)
+function isIinaPlusHexPayload(payload) {
+    return !!payload && payload.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(payload);
+}
+
+function readIinaPlusValue() {
+    let referrerHex = mpv.getString('referrer');
+    if (referrerHex) {
+        if (isIinaPlusHexPayload(referrerHex)) {
+            return iinaPlusArgsKey + referrerHex;
+        }
+        // leave the dirty value untouched — it is the site Referer the main file needs
+        return undefined;
+    }
+    let fromScriptOpts = mpv.getString('script-opts')?.split(',').find(s => s.startsWith(iinaPlusArgsKey));
+    if (!fromScriptOpts) {
+        return undefined;
+    }
+    if (!isIinaPlusHexPayload(fromScriptOpts.substring(iinaPlusArgsKey.length))) {
+        return undefined;
+    }
+    return fromScriptOpts;
+}
+
+function decodeIinaPlusValue(iinaPlusValue) {
+    return JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
+}
+
+function markIinaPlusArgsConsumed() {
+    optsParsed = true;
+    removeOpts();
+}
+
+// main-thread path: parse and consume; the hook's read-only probe is peekIinaPlusArgs
+function consumeIinaPlusArgs() {
+    let iinaPlusValue = readIinaPlusValue();
+    if (!iinaPlusValue) {
+        return undefined;
+    }
+
+    // parse failure degrades to "absent"; consume only on success, leave channels untouched on failure
+    let opts;
+    try {
+        opts = decodeIinaPlusValue(iinaPlusValue);
+    } catch (e) {
+        print('decode iinaPlusArgs failed: ' + e);
+        return undefined;
+    }
+
+    markIinaPlusArgsConsumed();
+
+    print('iinaPlusValue' + iinaPlusValue);
+    print('iina plus opts: ' + JSON.stringify(opts));
+
+    let mpvVer = iina.core.getVersion().mpv;
+    print('mpv version: ' + mpvVer);
+
+    return opts;
+}
+
+// read-only probe for the hook (controller queue): no consumption, no state
+function peekIinaPlusArgs() {
+    let iinaPlusValue = readIinaPlusValue();
+    if (!iinaPlusValue) {
+        return undefined;
+    }
+    try {
+        return decodeIinaPlusValue(iinaPlusValue);
+    } catch (e) {
+        print('peekIinaPlusArgs error: ' + e);
+        return undefined;
+    }
+}
+
+function applyIinaPlusArgs(opts) {
+    iinaPlusOpts = opts;
+    iinaPlusOpts.mpvScript = undefined;
+    switch(opts.type) {
+        case 0: // 0 ws
+        case 1: // 1 xmlFile
+            loadDanmaku();
+            break;
+        default: // 2 none
+            break;
+    };
+};
+
 function parseOpts() {
 
     if (optsParsed) {
@@ -103,65 +190,36 @@ function parseOpts() {
         return;
     }
 
-    let iinaPlusValue;
-
-    let referrerHex = mpv.getString('referrer');
-    if (referrerHex) {
-        iinaPlusValue = iinaPlusArgsKey + referrerHex;
+    let opts = hookArgsForMainThread;
+    hookArgsForMainThread = undefined;
+    if (opts) {
+        markIinaPlusArgsConsumed();
+        print('iina plus opts (from hook): ' + JSON.stringify(opts));
     } else {
-        let scriptOpts = mpv.getString('script-opts');
-        iinaPlusValue = scriptOpts?.split(',').find(s => s.startsWith(iinaPlusArgsKey));
+        opts = consumeIinaPlusArgs();
     }
-
-    if (!iinaPlusValue) {
+    if (!opts) {
         print("parseOpts: no iinaPlusArgs found");
         return;
     }
 
-    optsParsed = true;
-    removeOpts();
-
-    print('iinaPlusValue' + iinaPlusValue);
-
-    if (iinaPlusValue) {
-        let opts = JSON.parse(hexToString(iinaPlusValue.substring(iinaPlusArgsKey.length)));
-        print('iina plus opts: ' + JSON.stringify(opts));
-
-        // Old entry: iina-plus protocol — opts carries video URLs, reload via mpv.
-        if (opts.urls) {
-            let mpvVer = iina.core.getVersion().mpv;
-            let m = mpvVer.match(/\.(\d+)\./);
-            let number = m ? parseInt(m[1], 10) : undefined;
-            print('mpv version: ' + mpvVer);
-            print('mpv number: ' + number);
-            mpvNewLoadfileAPI = m ? number >= 38 : true;
-
-            mpvLoadfile(opts.urls[opts.currentLine], opts.mpvScript);
+    // hook missed the redirect (e.g. direct URL): fall back to one loadfile, never with undefined
+    if (opts.urls && !loadHookDidRedirect()) {
+        let realUrl = opts.urls[opts.currentLine];
+        if (realUrl) {
+            mpvLoadfile(realUrl, opts.mpvScript);
+        } else {
+            print('parseOpts: no url for currentLine=' + opts.currentLine + ', skip fallback loadfile');
         }
+    }
 
-        iinaPlusOpts = opts;
-        iinaPlusOpts.mpvScript = undefined;
-        switch(opts.type) {
-            case 0: // 0 ws
-            case 1: // 1 xmlFile
-                loadDanmaku();
-                break;
-            default: // 2 none
-                break;
-        };
-    };
+    applyIinaPlusArgs(opts);
 };
 
+// bare loadfile; per-file options are applied by the Load Hook in on_load
 function mpvLoadfile(url, opts) {
     mpvReloading = true;
-    if (mpvNewLoadfileAPI) {
-        // v0.38.0 , svp 0.39.0
-        mpv.command('loadfile', [url, 'replace', '0', opts]);
-    } else {
-        mpv.command('loadfile', [url, 'replace', opts]);
-    };
-
-    fdStart();
+    loadHookLoad(url, opts);
 };
 
 // ---------------------------------------------------------------------------
@@ -204,15 +262,12 @@ function initDanmakuWeb() {
     };
     iinaPlusOpts.blockType = blockList.join(',');
 
-
     showOverlay(false);
     overlay.postMessage("initDM", iinaPlusOpts);
     danmakuWebInited = true;
     print('initDM....');
 
-    // Re-sync play/visibility state. The setHidden sent from
-    // startWindowMainListener arrived before initDM (before cm existed) and
-    // was dropped, and pauseChanged may not fire for a fresh file.
+    // re-sync: the early setHidden was dropped and pauseChanged may not fire for a fresh file
     overlay.postMessage("setHidden", { 'hidden': !core.window.visible });
     overlay.postMessage("pauseChanged", { 'isPaused': mpvPaused });
 
@@ -225,7 +280,6 @@ function initDanmakuWeb() {
 function initMenuItems() {
     menu.removeAllItems();
     const danmakuMenuItem = menu.item("Danmaku");
-    // Init MainMenu Item.
     danmakuMenuItem.addSubMenuItem(menu.item("Select Danmaku File...", async () => {
         let path = await iina.utils.chooseFile('Select Danmaku File...', {
             'chooseDir': false,
@@ -257,7 +311,7 @@ function initMenuItems() {
     const qualityItem = menu.item("Qualitys");
     iinaPlusOpts.qualitys.forEach((element, index) => {
         qualityItem.addSubMenuItem(menu.item(element, () => {
-            requestNewUrl(element, iinaPlusOpts.currentLine)
+            requestNewUrl(element, iinaPlusOpts.currentLine);
         }, {
             selected: index == iinaPlusOpts.currentQuality
         }));
@@ -271,7 +325,7 @@ function initMenuItems() {
     const lineItem = menu.item("Lines");
     iinaPlusOpts.lines.forEach((element, index) => {
         lineItem.addSubMenuItem(menu.item(element, () => {
-            requestNewUrl(iinaPlusOpts.qualitys[iinaPlusOpts.currentQuality], index)
+            requestNewUrl(iinaPlusOpts.qualitys[iinaPlusOpts.currentQuality], index);
         }, {
             selected: index == iinaPlusOpts.currentLine
         }));
@@ -285,10 +339,10 @@ function initMenuItems() {
 function requestNewUrl(quality, line) {
     print(quality + line);
 
-    let u = 'http://127.0.0.1:'+iinaPlusOpts.port+'/video';
+    let u = 'http://127.0.0.1:' + iinaPlusOpts.port + '/video';
     let pars = {'url': iinaPlusOpts.rawUrl, 'key': quality, 'pluginAPI': '1'};
 
-    let timePos = iina.mpv.getNumber('time-pos')
+    let timePos = iina.mpv.getNumber('time-pos');
 
     iina.http.get(u, {params: pars}).then((response) => {
         let re = JSON.parse(hexToString(response.text));
@@ -312,8 +366,8 @@ function requestNewUrl(quality, line) {
         mpvLoadfile(url, re.mpvScript);
         initMenuItems();
     }).catch((response) => {
-        console.log(response)
-    })
+        print('requestNewUrl error: ' + response);
+    });
 };
 
 // ---------------------------------------------------------------------------
@@ -321,19 +375,7 @@ function requestNewUrl(quality, line) {
 // ---------------------------------------------------------------------------
 var windowScaleListenerID, timePosListenerID;
 
-// Window visibility — single source of truth is core.window.visible
-// (NSWindow.occlusionState). Two channels feed it to the webview:
-//
-//   1. iina.window-main.changed — instant, but only fires on main-window
-//      transitions (app activation, minimize/restore).
-//   2. A low-frequency poll — covers transitions that emit no event at all,
-//      notably switching to another desktop space. Without this the webview
-//      would stay stuck hidden after such a switch.
-//
-// The poll always reports the current state rather than only on change: the
-// webview OR-merges this with its own visibility API, which can latch to
-// hidden if its visibilitychange event fires in one direction only. A
-// repeated "visible" is what unlatches it. The webview dedupes on its side.
+// two channels feed visibility: the window-main event and a low-frequency poll (covers Space switches)
 var windowMainListenerID;
 var visibilityPollTimer;
 const VISIBILITY_POLL_MS = 500;
@@ -345,11 +387,8 @@ function reportVisibility() {
 function startWindowMainListener() {
     stopWindowMainListener();
     windowMainListenerID = event.on("iina.window-main.changed", reportVisibility);
-    // Sync initial state — catches the case where the plugin starts while
-    // the window is already hidden (no event will fire in that scenario).
+    // sync initial state: no event fires when the window is already hidden
     reportVisibility();
-    // Poll runs independently of pause/play — occlusion has nothing to do
-    // with playback state.
     stopVisibilityPoll();
     visibilityPollTimer = setInterval(reportVisibility, VISIBILITY_POLL_MS);
 };
@@ -415,13 +454,15 @@ function initObserverValues() {
 function deinit() {
     optsParsed = false;
     if (stopped) {
+        // before start-file, loadHookReset is skipped and the hook's handover may linger (guarded in handleOnLoad)
+        print('deinit skipped: stopped=true (before start-file)');
         return;
     };
     stopped = true;
-    fdStop();
     setObserver(false);
     stopWindowMainListener();
     iinaPlusOpts = undefined;
+    loadHookReset();
     removeOpts();
     unloadDanmaku();
     overlayShowing = false;
@@ -432,9 +473,17 @@ function deinit() {
 // ---------------------------------------------------------------------------
 // Event Registration — IINA / mpv lifecycle & state hooks
 // ---------------------------------------------------------------------------
+
+print('plugin loaded  instance=' + instanceID + '  mpv=' + core.getVersion().mpv);
+
 iina.event.on("iina.plugin-overlay-loaded", () => {
     print('iina.plugin-overlay-loaded');
     initDanmakuWeb();
+});
+
+// audio-file can't be set via file-local-options (mpv 0.38 returned -3); attach pending external audio here
+iina.event.on("iina.file-loaded", () => {
+    loadHookApplyPendingAudio();
 });
 
 // WKWebView visibilitychange → reads core.window.visible
@@ -467,105 +516,193 @@ iina.event.on("mpv.pause.changed", (isPaused) => {
 });
 
 iina.event.on("iina.pip.changed", (pip) => {
-    console.log("PIP: " + pip);
+    print("PIP: " + pip);
 });
 
 // ---------------------------------------------------------------------------
-// Frame Drop Monitor — pause+resume on sustained frame drops
-// Frame-Drop-Monitor-root-cause-zh-en.md
+// Load Hook — on_load: redirect + per-file options
 // ---------------------------------------------------------------------------
-var fdStart, fdStop;
+// Registered on module evaluation (before any load). Why a hook and how the
+// parsed args are handed over: doc §1 / §3.
+// ---------------------------------------------------------------------------
+var loadHookLoad, loadHookDidRedirect, loadHookApplyPendingAudio, loadHookReset;
 (function () {
-    var running = false;
-    var armed = false;
-    var dropListenerID = null;
-    var restartListenerID = null;
-    var watchdog = null;
-    var watchdogMs = 120000;
-    var base = 0;
-    var triggers = 0;
-    var maxTriggers = 5;
-    var cooldownMs = 5000;
-    var lastTriggerAt = 0;
-    var dropBaseFps = 60;
-    var dropBaseCount = 60;
-    var dropThreshold = null;
+    var pending = null;             // per-file opts registered by loadHookLoad, consumed in on_load
+    var redirected = false;         // initial load already redirected → start-file skips fallback load
+    var pendingAudio = [];          // audio files to attach via audio-add after file-loaded
+    var pendingAudioReferrer = '';  // global referrer written before attaching tracks
 
-    function read() {
-        try { return mpv.getNumber('frame-drop-count'); } catch (e) { return null; }
-    }
+    // iina-plus local endpoint (/huya/<uuid>.flv is playable as-is, never redirect)
+    var endpointPattern = /^https?:\/\/127\.0\.0\.1:\d+\/video\.mp4/;
 
-    // threshold scales with fps
-    function fpsThreshold() {
-        if (dropThreshold !== null) return dropThreshold;
-        let fps = 0;
-        try { fps = mpv.getNumber('container-fps'); } catch (e) {}
-        if (!fps || fps < 1) { try { fps = mpv.getNumber('estimated-vf-fps'); } catch (e2) {} }
-        if (!fps || fps < 1) fps = dropBaseFps;
-        dropThreshold = Math.max(30, Math.round(fps * dropBaseCount / dropBaseFps));
-        return dropThreshold;
-    }
-
-    function onDrop(count) {
-        if (triggers >= maxTriggers) return;
-        if (Date.now() - lastTriggerAt < cooldownMs) return;
-        let thr = fpsThreshold();
-        if ((count - base) > thr) {
-            triggers++;
-            base = count;
-            lastTriggerAt = Date.now();
-            mpv.set('pause', true);
-            mpv.set('pause', false);
-            print('[FrameDrop] cum=' + count + ' exceeded ' + thr + ', pause+resume (' + triggers + '/' + maxTriggers + ').');
-            resetWatchdog();
+    // write target: probe `file-local-options/<name>` first, else global — mpv.set failures are
+    // silent on the IINA side (return code dropped), so probing is the only reliable distinction
+    // (never route via `option-info/<name>/expects-file`: it takes a path, not a track)
+    function applyPerFileOptions(optionString) {
+        if (!optionString) {
+            return;
         }
-    }
+        parseOptionString(optionString).forEach(function (kv) {
+            var name = kv[0];
+            var value = kv[1];
 
-    function begin() {
-        if (running) return;
-        let d = read();
-        if (d === null) return;
-        running = true;
-        base = d;
-        triggers = 0;
-        lastTriggerAt = 0;
-        dropListenerID = iina.event.on("mpv.frame-drop-count.changed", onDrop);
-        resetWatchdog();
-        print('FrameDrop monitor started (max ' + maxTriggers + ', auto-stop ' + (watchdogMs / 1000) + 's)');
-    }
+            // path-based track options are `-append` aliases, unassignable at runtime (-3 on 0.38)
+            // and renamed on 0.41 (audio-files / external-files) → always audio-add, match by family
+            if (/^(audio|external)-file/.test(name)) {
+                pendingAudio.push(value);
+                return;
+            }
+            // same value is reused for external tracks (pendingAudioReferrer)
+            if (name === 'referrer') {
+                pendingAudioReferrer = value;
+            }
 
-    function arm() {
-        if (armed) return;
-        armed = true;
-        restartListenerID = iina.event.on("mpv.playback-restart", () => { if (!mpvPaused) begin(); });
-    }
-
-    fdStart = function () {
-        if (running && mpvReloading) {
-            fdStop();
-        }
-        if (running) return;
-        if (mpvPaused) { arm(); return; }
-        let playing = false;
-        try { playing = mpv.getNumber('time-pos') > 0; } catch (e) {}
-        playing ? begin() : arm();
+            var target = 'file-local-options/' + name;
+            var probe = mpv.getString(target);
+            if (probe === undefined || probe === null) {
+                print('per-file option unknown to this mpv, set globally: ' + name);
+                mpv.set(name, value);
+                return;
+            }
+            mpv.set(target, value);
+        });
     };
 
-    function resetWatchdog() {
-        if (watchdog) clearTimeout(watchdog);
-        watchdog = setTimeout(() => {
-            print('[FrameDrop] no trigger in ' + (watchdogMs / 1000) + 's, stopping.');
-            fdStop();
-        }, watchdogMs);
-    }
+    // split on commas, but respect quotes (mpvScript titles may contain commas)
+    function parseOptionString(str) {
+        if (!str) {
+            return [];
+        }
+        var parts = [];
+        var buf = '';
+        var inQuote = false;
+        for (var i = 0; i < str.length; i++) {
+            var c = str.charAt(i);
+            if (c === '"') {
+                inQuote = !inQuote;
+                buf += c;
+                continue;
+            }
+            if (c === ',' && !inQuote) {
+                parts.push(buf);
+                buf = '';
+                continue;
+            }
+            buf += c;
+        }
+        parts.push(buf);
 
-    fdStop = function () {
-        running = false;
-        if (dropListenerID) { iina.event.off("mpv.frame-drop-count.changed", dropListenerID); dropListenerID = null; }
-        if (restartListenerID) { iina.event.off("mpv.playback-restart", restartListenerID); restartListenerID = null; }
-        if (watchdog) { clearTimeout(watchdog); watchdog = null; }
-        armed = false;
-        dropThreshold = null; // recompute for the next video's fps
-        print('FrameDrop monitor stopped.');
+        var result = [];
+        parts.forEach(function (part) {
+            var idx = part.indexOf('=');
+            if (idx <= 0) {
+                return;
+            }
+            var name = part.substring(0, idx).trim();
+            var value = part.substring(idx + 1).trim();
+            if (value.length >= 2 && value.charAt(0) === '"' && value.charAt(value.length - 1) === '"') {
+                value = value.substring(1, value.length - 1);
+            }
+            result.push([name, value]);
+        });
+        return result;
     };
+
+    function handleOnLoad() {
+        pendingAudio = [];              // fresh option set per load
+        pendingAudioReferrer = '';
+
+        var url = mpv.getString('stream-open-filename');
+        var isEndpoint = endpointPattern.test(url);
+        print('on_load: ' + url);
+
+        // (1) plugin-initiated load → apply the registered per-file options
+        if (pending && pending.url === url) {
+            var current = pending;
+            pending = null;
+            print('on_load: apply per-file options (plugin load)');
+            applyPerFileOptions(current.options);
+            return;
+        }
+        if (pending) {
+            print('on_load: url mismatch with pending load. pending=' + pending.url);
+        }
+
+        // (2) initial load: IINA opened the local endpoint → swap in the real URL (controller queue, mpv-only I/O)
+        if (!optsParsed && isEndpoint) {
+            var opts = peekIinaPlusArgs();
+            if (!opts) {
+                print('on_load: keep original load, no iinaPlusArgs for endpoint');
+                return;
+            }
+            hookArgsForMainThread = opts;   // hand over before the referrer write below overwrites the channel
+            var realUrl = opts.urls ? opts.urls[opts.currentLine] : undefined;
+            if (realUrl) {
+                print('on_load: redirect to ' + realUrl);
+                applyPerFileOptions(opts.mpvScript);   // apply options (incl. referrer) before swapping the URL
+                mpv.set('stream-open-filename', realUrl);
+                redirected = true;
+            } else if (opts.urls) {
+                print('on_load: no url for currentLine=' + opts.currentLine + ', keep original load');
+            }
+            return;
+        }
+
+        // unrelated load (local file / direct URL): clear lingering state — a load failing
+        // before start-file can otherwise leave hook args, pending and redirected set
+        hookArgsForMainThread = undefined;
+        pending = null;
+        redirected = false;
+    };
+
+    function register() {
+        // async callback must call next() exactly once, or this load hangs
+        mpv.addHook('on_load', 10, async function (next) {
+            try {
+                handleOnLoad();
+            } catch (e) {
+                print('on_load error: ' + e);
+            }
+            next();
+        });
+        print('on_load hook registered.');
+    };
+
+    loadHookLoad = function (url, opts) {
+        pending = { 'url': url, 'options': opts };
+        print('loadfile: ' + url + '  (per-file options deferred to on_load)');
+        mpv.command('loadfile', [url]);
+    };
+
+    loadHookDidRedirect = function () {
+        return redirected;
+    };
+
+    // main thread (iina.file-loaded): attach collected audio files via audio-add.
+    // Referer must go through the global `referrer` (http-header-fields sends a second
+    // Referer header → bilibili CDN 403); flags use `select` (`auto` = "not selected")
+    loadHookApplyPendingAudio = function () {
+        if (pendingAudio.length === 0) {
+            return 0;
+        }
+        mpv.set('referrer', pendingAudioReferrer || '');
+        var urls = pendingAudio;
+        pendingAudio = [];
+        pendingAudioReferrer = '';
+        urls.forEach(function (url) {
+            print('audio-add: ' + url);
+            mpv.command('audio-add', [url, 'select']);
+        });
+        return urls.length;
+    };
+
+    loadHookReset = function () {
+        pending = null;
+        redirected = false;
+        hookArgsForMainThread = undefined;
+        pendingAudio = [];
+        pendingAudioReferrer = '';
+    };
+
+    register();
 })();
