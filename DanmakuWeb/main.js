@@ -17,14 +17,89 @@ function hexToString(hex) {
     return decodeURIComponent('%' + hex.match(/.{1,2}/g).join('%'));
 };
 
+// ---- Danmaku play/visibility state ----
+//
+// Two independent truths decide whether danmaku should render:
+//   wantPlaying — false while the video is paused (user intent)
+//   hidden      — true while the window is occluded / in the background
+// Rendering only happens when the video plays AND the window is visible.
+//
+// `hidden` is OR-merged from two sources that disagree during transitions:
+// the IINA side (NSWindow.occlusionState) and the webview's own visibility
+// API. OR semantics are deliberate — a stale "visible" from one source must
+// never resume rendering while the other still reports hidden.
+
+var wantPlaying = true;
+var hiddenByIINA = false;
+var hiddenByWebview = false;
+
+// Pending WebSocket danmaku timers. A burst of dms is staggered with
+// setTimeout(index * 150) to smooth output — but those timers keep ticking
+// while hidden, so on restore they would all fire at once and dump a pile of
+// stale danmaku onto the screen. We drop them whenever rendering stops.
+var dmTimers = [];
+
+function clearDmTimers() {
+    for (var i = 0; i < dmTimers.length; i++) {
+        clearTimeout(dmTimers[i]);
+    }
+    dmTimers = [];
+}
+
+// Last (hidden, wantPlaying) combination pushed to cm. The IINA side
+// re-reports window state on every poll tick, so dedupe here rather than
+// doing needless clear()/start() work twice a second.
+var lastAppliedState = null;
+
+// Reconcile cm with (wantPlaying, hidden):
+//   hidden          — drop everything, nothing should linger on screen
+//   visible, paused — keep on-screen danmaku frozen (normal pause look)
+//   visible, playing— render
+// Pending timers are dropped in both non-rendering cases, since they would
+// otherwise all fire at once the moment rendering resumes.
+function applyDanmakuState() {
+    if (typeof window.cm === 'undefined' || !window.cm.setHidden) {
+        return;
+    }
+    var hidden = hiddenByIINA || hiddenByWebview;
+    var state = (hidden ? 'H' : 'V') + (wantPlaying ? 'P' : 'S');
+    if (state === lastAppliedState) {
+        return;
+    }
+    lastAppliedState = state;
+    if (window.cm.isHidden() !== hidden) {
+        window.cm.setHidden(hidden);
+    }
+    if (hidden) {
+        window.cm.clear();
+        clearDmTimers();
+        window.cm.stop();
+    } else if (wantPlaying) {
+        window.cm.start();
+    } else {
+        clearDmTimers();
+        window.cm.stop();
+    }
+}
+
 // ---- iina Message Handlers ----
 
 iina.onMessage("initDM", (opts) => {
     srcType = opts.type;
     baseWidth = opts.dmSpeed;
 
+    // Fresh file — drop leftover timers, reset per-file intent, and force a
+    // re-apply since a new cm was just created. Visibility is tracked
+    // per-window rather than per-file, so hiddenByIINA keeps its value (the
+    // IINA side also re-reports it right after initDM to be safe).
+    clearDmTimers();
+    wantPlaying = true;
+    hiddenByWebview = document.hidden;
+    lastAppliedState = null;
+
     window.bind();
     window.initDM();
+    applyDanmakuState();
 
     switch(srcType) {
         case 0:
@@ -77,18 +152,27 @@ iina.onMessage("timeChanged", (t) => {
 });
 
 iina.onMessage("pauseChanged", (t) => {
-    t.isPaused ? window.cm.stop() : window.cm.start();
+    wantPlaying = !t.isPaused;
+    applyDanmakuState();
 });
 
 iina.onMessage("setHidden", (t) => {
-    if (typeof window.cm !== 'undefined' && window.cm.setHidden && window.cm.isHidden() !== t.hidden) {
-        window.cm.setHidden(t.hidden);
-        if (t.hidden) { window.cm.clear(); }
+    var changed = hiddenByIINA !== t.hidden;
+    hiddenByIINA = t.hidden;
+    if (!t.hidden) {
+        // The IINA side says the window is visible (authoritative, from
+        // occlusionState). Drop our own flag too — the webview's
+        // visibilitychange can fire in one direction only and latch us hidden.
+        hiddenByWebview = false;
+    }
+    applyDanmakuState();
+    if (changed) {
         console.log('setHidden:', t.hidden);
     }
 });
 
 iina.onMessage("close", () => {
+    clearDmTimers();
     window.cm.clear();
     window.cm.stop();
     window._provider.destroy();
@@ -269,7 +353,7 @@ function start(websocketServerLocation){
         switch(event.method) {
         case 'sendDM':
             event.dms.forEach(function(element, index) {
-                setTimeout(function () {
+                dmTimers.push(setTimeout(function () {
                     var comment = {
                         'text': element.text,
                         'stime': 0,
@@ -280,7 +364,7 @@ function start(websocketServerLocation){
                         'imageWidth': element.imageWidth
                     };
                     window.cm.send(comment);
-                }, index * 150);
+                }, index * 150));
             });
         default:
             break;
@@ -320,9 +404,7 @@ function initWebsocket(port){
 // IINA side's window-main.changed provides the cross-check via occlusionState.
 
 document.addEventListener("visibilitychange", () => {
-    if (typeof window.cm !== 'undefined' && window.cm.setHidden) {
-        let hidden = document.hidden;
-        window.cm.setHidden(hidden);
-        console.log('visibilitychange: hidden=' + hidden);
-    }
+    hiddenByWebview = document.hidden;
+    applyDanmakuState();
+    console.log('visibilitychange: hidden=' + document.hidden);
 });
