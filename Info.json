@@ -1,8 +1,8 @@
 {
     "name": "Danmaku",
     "identifier": "com.xjbeta.danmaku",
-    "version": "0.1.19",
-    "ghVersion": 16,
+    "version": "0.0.0",
+    "ghVersion": 0,
     "ghRepo": "xjbeta/iina-plugin-danmaku",
     "description": "IINA Danmaku",
     "author": {
@@ -18,14 +18,15 @@
         "file-system",
         "network-request"
     ],
-    "allowedDomains": ["127.0.0.1"],
+    "allowedDomains": [
+        "127.0.0.1"
+    ],
     "preferencesPage": "pref.html",
     "preferenceDefaults": {
         "dmOpacity": 1,
         "dmSpeed": 680,
         "dmFont": "PingFang SC",
         "enableIINAPLUSOptsParse": 0,
-
         "blockTypeScroll": 0,
         "blockTypeTop": 0,
         "blockTypeBottom": 0,
