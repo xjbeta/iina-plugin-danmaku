@@ -15,6 +15,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # ghVersion uses commit count — needs full history (shallow clone miscounts)
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -23,6 +26,25 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      # Version injected at build time only — repo keeps placeholders (no write-back).
+      # Trade-off: IINA's update check reads the placeholder and won't prompt.
+      - name: Bump version and ghVersion in Info.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$' \
+            || { echo "invalid tag: $TAG (expected 1.2.3 or 1.2.3-beta.1)"; exit 1; }
+
+          # ghVersion: commit count (monotonic)
+          GH_VERSION=$(git rev-list --count HEAD)
+
+          jq --indent 4 --arg v "$VERSION" --argjson g "$GH_VERSION" \
+            '.version = $v | .ghVersion = $g' Info.json > /tmp/Info.json.new
+          mv /tmp/Info.json.new Info.json
+
+          echo "Info.json -> $(jq -c '{version, ghVersion}' Info.json)"
 
       - name: Create plugin archive
         run: |
